@@ -1,0 +1,7 @@
+// Release.xcconfig — Production build configuration
+// Applied to the Release scheme for App Store distribution.
+// API_BASE_URL must point to the production FastAPI server.
+
+API_BASE_URL = https://api.twintrades.com
+ENVIRONMENT = release
+PRODUCT_BUNDLE_IDENTIFIER = com.twintrades.app

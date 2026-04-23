@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Keychain Sharing — allows access to shared keychain group if needed in future -->
+    <key>keychain-access-groups</key>
+    <array>
+        <string>$(AppIdentifierPrefix)com.twintrades.app</string>
+    </array>
+
+    <!-- Push Notifications (APNs) -->
+    <key>aps-environment</key>
+    <string>development</string>
+
+    <!-- Associated Domains for universal links (e.g. password reset email links) -->
+    <key>com.apple.developer.associated-domains</key>
+    <array>
+        <string>applinks:twintrades.com</string>
+        <string>webcredentials:twintrades.com</string>
+    </array>
+
+    <!-- In-App Purchase (StoreKit 2) — no explicit entitlement key needed; enabled in App Store Connect -->
+</dict>
+</plist>
