@@ -9,29 +9,52 @@ class UserDbContext:
         self.session = session
 
     async def find_by_id(self, user_id: int) -> User | None:
-        # Query users table by primary key and return the row, or None if not found.
-        # Exclude soft-deleted rows (deleted_at IS NOT NULL) unless explicitly requested.
-        pass
+        result = await self.session.execute(
+            select(User).where(
+                User.id == user_id,
+                User.deleted_at.is_(None),
+            )
+        )
+        return result.scalar_one_or_none()
 
     async def find_by_email(self, email: str) -> User | None:
-        # Case-insensitive lookup by email; return None if no active row matches.
-        # Used by login and forgot-password flows — never expose existence to unauthenticated callers.
-        pass
+        result = await self.session.execute(
+            select(User).where(
+                User.email == email.lower(),
+                User.deleted_at.is_(None),
+            )
+        )
+        return result.scalar_one_or_none()
 
     async def find_by_username(self, username: str) -> User | None:
-        # Look up user by exact username for uniqueness checks during registration.
-        # Return None when the username is available.
-        pass
+        result = await self.session.execute(
+            select(User).where(
+                User.username == username,
+                User.deleted_at.is_(None),
+            )
+        )
+        return result.scalar_one_or_none()  
 
     async def insert(self, **kwargs) -> User:
-        # Create and add a new User ORM object with the supplied keyword arguments.
-        # Flush and return the object so the caller can read the auto-generated id before commit.
-        pass
+        user = User(**kwargs)
+        self.session.add(user)
+        await self.session.flush()
+        return user
 
     async def update_by_id(self, user_id: int, **kwargs) -> User | None:
-        # Apply the keyword-argument field updates to the matching user row via SQLAlchemy update().
-        # Return the updated User object, or None if the user_id does not exist.
-        pass
+        result = await self.session.execute(
+            select(User).where(
+                User.id == user_id,
+                User.deleted_at.is_(None),
+            )
+        )
+        user = result.scalar_one_or_none()
+        if user is None:
+            return None
+        for key, value in kwargs.items():
+            setattr(user, key, value)
+        await self.session.flush()
+        return user
 
     async def update_device_tokens(self, user_id: int, apns_device_token: str) -> None:
         # Update only the apns_device_token column for the given user — no other fields change.

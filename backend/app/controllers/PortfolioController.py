@@ -4,6 +4,7 @@ from app.helper.Database import get_session
 from app.middleware.AuthMiddleware import get_current_user
 from app.middleware.RateLimiters import api_limiter
 from app.schemas.Portfolio import PortfolioResponse, JoinPortfolioPayload
+from app.services.PortfolioService import PortfolioService
 
 router = APIRouter(prefix="/portfolios", tags=["portfolios"])
 
@@ -18,10 +19,7 @@ async def list_marketplace(current_user=Depends(get_current_user), session: Asyn
 
 @router.get("/mine", response_model=list[PortfolioResponse])
 async def get_my_portfolios(current_user=Depends(get_current_user), session: AsyncSession = Depends(get_session)):
-    # Return all portfolios the authenticated user is actively following (left_at IS NULL).
-    # Include holdings and total_return_pct for each portfolio.
-    # Return empty list (not 404) if the user has no portfolios.
-    pass
+    return await PortfolioService(session).get_my_portfolios(current_user.id)
 
 
 @router.get("/{portfolio_id}", response_model=PortfolioResponse)

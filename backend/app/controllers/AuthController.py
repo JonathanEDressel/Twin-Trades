@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.helper.Database import get_session
 from app.middleware.AuthMiddleware import get_current_user
 from app.middleware.RateLimiters import auth_limiter
+from app.services.AuthService import AuthService
 from app.schemas.Auth import (
     LoginPayload, RegisterPayload, OtpPayload,
     ChangePasswordPayload, ForgotPasswordPayload,
@@ -15,19 +16,15 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 @router.post("/login")
 @auth_limiter
 async def login(request: Request, body: LoginPayload, session: AsyncSession = Depends(get_session)):
-    # Validate credentials via AuthService.login and return a TokenResponse on success.
-    # On failure, increment login attempt counter and raise UnauthorizedError after too many failures.
-    # Log the attempt (success or failure) to login_audits via AuthDbContext.insert_login_audit.
-    pass
+    ip = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
+    return await AuthService(session).login(body, ip, user_agent)
 
 
 @router.post("/register")
 @auth_limiter
 async def register(request: Request, body: RegisterPayload, session: AsyncSession = Depends(get_session)):
-    # Create a new user account via AuthService.register if email and username are both unique.
-    # Hash the password via Security.hash_password before passing to AuthDbContext.
-    # Return a TokenResponse with freshly minted access and refresh tokens.
-    pass
+    return await AuthService(session).register(body)
 
 
 @router.post("/refresh")
@@ -41,10 +38,8 @@ async def refresh(request: Request, body: RefreshPayload, session: AsyncSession 
 
 @router.post("/logout")
 async def logout(body: RefreshPayload, current_user=Depends(get_current_user), session: AsyncSession = Depends(get_session)):
-    # Revoke the supplied refresh token and all other active refresh tokens for this user.
-    # This is a "logout all devices" operation — there is no single-device logout endpoint.
-    # Always return 200 even if the token is already revoked to prevent enumeration.
-    pass
+    await AuthService(session).logout(body, current_user.id)
+    return {"message": "Logged out successfully"}
 
 
 @router.post("/request-otp")

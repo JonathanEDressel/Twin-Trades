@@ -2,6 +2,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.controllers.PortfolioDbContext import PortfolioDbContext
 from app.controllers.SubscriptionDbContext import SubscriptionDbContext
 from app.models.PortfolioModel import Portfolio, UserPortfolio
+from app.schemas.Portfolio import PortfolioResponse, PortfolioHoldingResponse
 
 
 class PortfolioService:
@@ -17,10 +18,21 @@ class PortfolioService:
         # Include holdings for each portfolio for display in the marketplace view.
         pass
 
-    async def get_my_portfolios(self, user_id: int) -> list[Portfolio]:
-        # Return all portfolios the user is actively following (left_at IS NULL).
-        # Eagerly load holdings so the caller can serialize without additional DB queries.
-        pass
+    async def get_my_portfolios(self, user_id: int) -> list[PortfolioResponse]:
+        portfolios = await self.portfolio_db.find_user_portfolios(user_id)
+        result = []
+        for p in portfolios:
+            holdings = await self.portfolio_db.find_holdings(p.id)
+            result.append(PortfolioResponse(
+                id=p.id,
+                name=p.name,
+                description=p.description,
+                is_active=p.is_active,
+                total_return_pct=p.total_return_pct,
+                holdings=[PortfolioHoldingResponse.model_validate(h) for h in holdings],
+                created_at=p.created_at,
+            ))
+        return result
 
     async def get_detail(self, portfolio_id: int, user_id: int) -> Portfolio:
         # Return full portfolio detail including holdings and return metrics.

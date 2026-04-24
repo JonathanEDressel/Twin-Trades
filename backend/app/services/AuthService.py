@@ -1,7 +1,10 @@
+import secrets
+from datetime import datetime, timedelta, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.controllers.AuthDbContext import AuthDbContext
 from app.controllers.UserDbContext import UserDbContext
-from app.helper.Security import Security
+from app.helper.Security import Security, REFRESH_TOKEN_EXPIRE_DAYS
+from app.helper.ErrorHandler import UnauthorizedError, ConflictError
 from app.schemas.Auth import LoginPayload, RegisterPayload, RefreshPayload, TokenResponse
 
 
@@ -13,16 +16,57 @@ class AuthService:
         self.user_db = UserDbContext(session)
 
     async def login(self, payload: LoginPayload, ip: str | None, user_agent: str | None) -> TokenResponse:
-        # Look up the user by email and verify the password hash via Security.verify_password.
-        # If must_change_password is True, return a scoped access token with scope="change_password_only".
-        # On success, mint a full token pair, insert refresh token hash, and log the audit record.
-        pass
+        user = await self.user_db.find_by_email(payload.email)
+
+        if user is None or not Security.verify_password(payload.password, user.password_hash):
+            await self.auth_db.insert_login_audit(
+                user_id=user.id if user else None,
+                ip=ip,
+                user_agent=user_agent,
+                success=False,
+            )
+            await self.session.commit()
+            raise UnauthorizedError("Invalid email or password")
+
+        claims: dict = {"sub": str(user.id), "role": user.role.value}
+        if user.must_change_password:
+            claims["scope"] = "change_password_only"
+
+        access_token = Security.sign_jwt(claims)
+        raw_refresh = secrets.token_urlsafe(32)
+        token_hash = Security.hash_refresh_token(raw_refresh)
+        expires_at = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+
+        await self.auth_db.insert_refresh_token(user.id, token_hash, expires_at)
+        await self.auth_db.insert_login_audit(user.id, ip, user_agent, True)
+        await self.session.commit()
+
+        return TokenResponse(access_token=access_token, refresh_token=raw_refresh)
 
     async def register(self, payload: RegisterPayload) -> TokenResponse:
-        # Verify email and username uniqueness; raise ConflictError if either is taken.
-        # Hash the password with Security.hash_password and insert the user via UserDbContext.
-        # Return a fresh token pair so the client is immediately logged in after registration.
-        pass
+        if await self.user_db.find_by_email(payload.email):
+            raise ConflictError("Email already registered")
+        if await self.user_db.find_by_username(payload.username):
+            raise ConflictError("Username already taken")
+
+        password_hash = Security.hash_password(payload.password)
+        user = await self.user_db.insert(
+            email=payload.email.lower(),
+            username=payload.username,
+            password_hash=password_hash,
+            display_name=payload.display_name,
+        )
+
+        claims = {"sub": str(user.id), "role": user.role.value}
+        access_token = Security.sign_jwt(claims)
+        raw_refresh = secrets.token_urlsafe(32)
+        token_hash = Security.hash_refresh_token(raw_refresh)
+        expires_at = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+
+        await self.auth_db.insert_refresh_token(user.id, token_hash, expires_at)
+        await self.session.commit()
+
+        return TokenResponse(access_token=access_token, refresh_token=raw_refresh)
 
     async def refresh_tokens(self, payload: RefreshPayload) -> TokenResponse:
         # Validate the refresh token hash against the DB and check it is not expired or revoked.
@@ -31,9 +75,8 @@ class AuthService:
         pass
 
     async def logout(self, payload: RefreshPayload, user_id: int) -> None:
-        # Revoke all refresh tokens for the given user_id regardless of which token was supplied.
-        # This is intentionally a full logout — single-device logout is not supported.
-        pass
+        await self.auth_db.revoke_all_refresh_tokens(user_id)
+        await self.session.commit()
 
     async def request_otp(self, user_id: int) -> None:
         # Generate a 6-digit OTP, hash it, insert into otp_tokens with a 10-minute TTL.

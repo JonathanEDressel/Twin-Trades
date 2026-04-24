@@ -1,4 +1,4 @@
-from passlib.hash import bcrypt as _bcrypt
+import bcrypt as _bcrypt_lib
 from jose import jwt, JWTError
 from datetime import datetime, timedelta, timezone
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -14,38 +14,34 @@ class Security:
 
     @staticmethod
     def hash_password(plaintext: str) -> str:
-        # Hash the plaintext password with bcrypt at BCRYPT_ROUNDS=12 and return the hash string.
-        # Never store or log the plaintext value after this call.
-        # Use verify_password for all subsequent comparisons — never equality checks.
-        pass
+        return _bcrypt_lib.hashpw(plaintext.encode(), _bcrypt_lib.gensalt(rounds=BCRYPT_ROUNDS)).decode()
 
     @staticmethod
     def verify_password(plaintext: str, hashed: str) -> bool:
-        # Compare the plaintext password against the stored bcrypt hash using constant-time comparison.
-        # Returns True only if the hash matches — raises nothing on mismatch, just returns False.
-        # Never log either argument; this is a security-critical function.
-        pass
+        return _bcrypt_lib.checkpw(plaintext.encode(), hashed.encode())
 
     @staticmethod
     def sign_jwt(claims: dict, expires_in: timedelta | None = None, secret: str | None = None) -> str:
-        # Sign a JWT with the provided claims dict using HS256 and the configured secret.
-        # Defaults to ACCESS_TOKEN_EXPIRE_MINUTES if expires_in is not provided.
-        # Pass a custom secret to use JWT_REFRESH_SECRET for refresh tokens.
-        pass
+        if expires_in is None:
+            expires_in = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        if secret is None:
+            secret = settings.JWT_SECRET
+        payload = {**claims, "exp": datetime.now(timezone.utc) + expires_in}
+        return jwt.encode(payload, secret, algorithm="HS256")
 
     @staticmethod
     def verify_jwt(token: str, secret: str | None = None) -> dict:
-        # Decode and verify the JWT signature, expiry, and structure.
-        # Raises UnauthorizedError (not JWTError) so callers don't need to import jose.
-        # Returns the decoded claims dict on success.
-        pass
+        from app.helper.ErrorHandler import UnauthorizedError
+        if secret is None:
+            secret = settings.JWT_SECRET
+        try:
+            return jwt.decode(token, secret, algorithms=["HS256"])
+        except JWTError:
+            raise UnauthorizedError("Invalid or expired token")
 
     @staticmethod
     def hash_refresh_token(raw_token: str) -> str:
-        # Compute the SHA-256 hex digest of the raw refresh token string.
-        # Only the hash is stored in the DB — the raw token is returned to the client once.
-        # Pure function with no side effects.
-        pass
+        return hashlib.sha256(raw_token.encode()).hexdigest()
 
     @staticmethod
     def generate_otp() -> str:

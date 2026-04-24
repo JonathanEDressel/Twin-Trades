@@ -1,7 +1,0 @@
-// Debug.xcconfig — Development build configuration
-// Applied to the Debug scheme in Xcode project settings.
-// Never commit real secrets here; use environment variables in CI.
-
-API_BASE_URL = http://localhost:8000
-ENVIRONMENT = debug
-PRODUCT_BUNDLE_IDENTIFIER = com.twintrades.app

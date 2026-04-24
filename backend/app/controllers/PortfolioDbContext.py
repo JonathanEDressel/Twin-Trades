@@ -19,8 +19,12 @@ class PortfolioDbContext:
         pass
 
     async def find_holdings(self, portfolio_id: int) -> list[PortfolioHolding]:
-        # Return all PortfolioHolding rows for the given portfolio_id ordered by ticker ASC.
-        pass
+        result = await self.session.execute(
+            select(PortfolioHolding)
+            .where(PortfolioHolding.portfolio_id == portfolio_id)
+            .order_by(PortfolioHolding.ticker)
+        )
+        return list(result.scalars().all())
 
     async def replace_holdings(self, portfolio_id: int, holdings: list[dict]) -> None:
         # Delete all existing holdings for the portfolio, then bulk-insert the new list.
@@ -29,14 +33,25 @@ class PortfolioDbContext:
         pass
 
     async def find_user_portfolio(self, user_id: int, portfolio_id: int) -> UserPortfolio | None:
-        # Return the active user_portfolios row (left_at IS NULL) matching both IDs.
-        # Return None if the user has not joined or has already left.
-        pass
+        result = await self.session.execute(
+            select(UserPortfolio).where(
+                UserPortfolio.user_id == user_id,
+                UserPortfolio.portfolio_id == portfolio_id,
+                UserPortfolio.left_at.is_(None),
+            )
+        )
+        return result.scalar_one_or_none()
 
-    async def find_user_portfolios(self, user_id: int) -> list[UserPortfolio]:
-        # Return all active user_portfolios rows for the user (left_at IS NULL).
-        # Include the related Portfolio object via join so callers get full portfolio data.
-        pass
+    async def find_user_portfolios(self, user_id: int) -> list[Portfolio]:
+        result = await self.session.execute(
+            select(Portfolio)
+            .join(UserPortfolio, UserPortfolio.portfolio_id == Portfolio.id)
+            .where(
+                UserPortfolio.user_id == user_id,
+                UserPortfolio.left_at.is_(None),
+            )
+        )
+        return list(result.scalars().all())
 
     async def find_syncing_users(self, portfolio_id: int) -> list[int]:
         # Return a list of user_ids that are actively following the given portfolio.

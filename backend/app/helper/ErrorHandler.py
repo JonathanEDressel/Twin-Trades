@@ -43,4 +43,4 @@ async def unexpected_error_handler(request: Request, exc: Exception) -> JSONResp
     # Log the full traceback and request context to error_logs table via AdminDbContext.
     # Never expose the raw exception message or stack trace to the client response.
     # Return a generic 500 message to avoid leaking implementation details.
-    pass
+    return JSONResponse(status_code=500, content={"error": "An unexpected error occurred"})

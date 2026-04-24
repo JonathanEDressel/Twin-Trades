@@ -3,8 +3,7 @@ name = "twin-trades-backend"
 version = "0.1.0"
 description = "TwinTrades copy-trading backend API"
 authors = ["TwinTrades Team"]
-readme = "README.md"
-packages = [{ include = "app" }]
+package-mode = false
 
 [tool.poetry.dependencies]
 python = "^3.11"
@@ -41,7 +40,7 @@ aiosmtplib = "^3.0.0"
 jinja2 = "^3.1.0"
 
 # Apple / StoreKit
-apple-app-store-server-library = "^2.2.0"
+app-store-server-library = ">=1.0.0"
 
 # Logging
 structlog = "^24.1.0"

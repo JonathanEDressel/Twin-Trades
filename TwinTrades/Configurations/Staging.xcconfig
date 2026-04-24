@@ -1,7 +1,0 @@
-// Staging.xcconfig — Staging build configuration
-// Applied to a Staging scheme pointing at the staging API server.
-// Staging builds can be distributed via TestFlight.
-
-API_BASE_URL = https://staging-api.twintrades.com
-ENVIRONMENT = staging
-PRODUCT_BUNDLE_IDENTIFIER = com.twintrades.app

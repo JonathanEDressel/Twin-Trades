@@ -12,7 +12,15 @@ async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
     session: AsyncSession = Depends(get_session),
 ):
-    # Verify the Bearer JWT using Security.verify_jwt and look up the user by the sub claim.
-    # Reject tokens whose scope == "change_password_only" — those are only valid on /auth/change-password.
-    # Raise UnauthorizedError if the token is expired, invalid, or the user row no longer exists.
-    pass
+    claims = Security.verify_jwt(credentials.credentials)
+
+    if claims.get("scope") == "change_password_only":
+        raise UnauthorizedError("Token is restricted to password change only")
+
+    user_id = int(claims["sub"])
+    from app.controllers.UserDbContext import UserDbContext
+    user = await UserDbContext(session).find_by_id(user_id)
+    if user is None:
+        raise UnauthorizedError("User not found or has been deleted")
+
+    return user

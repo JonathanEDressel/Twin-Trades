@@ -1,14 +1,14 @@
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, field_validator
 import re
 
 
 class LoginPayload(BaseModel):
-    email: EmailStr
+    email: str
     password: str
 
 
 class RegisterPayload(BaseModel):
-    email: EmailStr
+    email: str
     username: str
     password: str
     display_name: str | None = None
@@ -40,7 +40,7 @@ class ChangePasswordPayload(BaseModel):
 
 
 class ForgotPasswordPayload(BaseModel):
-    email: EmailStr
+    email: str
 
 
 class ResetPasswordPayload(BaseModel):

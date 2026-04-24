@@ -15,14 +15,23 @@ class AuthDbContext:
         pass
 
     async def insert_refresh_token(self, user_id: int, token_hash: str, expires_at: datetime) -> RefreshToken:
-        # Insert a new refresh_tokens row with the provided hash and expiry.
-        # Flush and return the new ORM object so the caller can read the auto-generated id.
-        pass
+        token = RefreshToken(user_id=user_id, token_hash=token_hash, expires_at=expires_at)
+        self.session.add(token)
+        await self.session.flush()
+        return token
 
     async def revoke_all_refresh_tokens(self, user_id: int) -> int:
         # Set revoked_at = now() on all non-revoked refresh tokens for the given user_id.
         # Return the count of rows updated so the caller can log how many sessions were ended.
-        pass
+        result = await self.session.execute(
+            update(RefreshToken)
+            .where(
+                RefreshToken.user_id == user_id,
+                RefreshToken.revoked_at.is_(None),
+            )
+            .values(revoked_at=datetime.now(timezone.utc))
+        )
+        return result.rowcount
 
     async def find_otp_token(self, user_id: int, purpose: str) -> OtpToken | None:
         # Return the most recent non-expired, non-used OTP row for this user+purpose combination.
@@ -40,6 +49,14 @@ class AuthDbContext:
         pass
 
     async def insert_login_audit(self, user_id: int | None, ip: str | None, user_agent: str | None, success: bool) -> None:
-        # Insert a login_audits row for forensic / anomaly-detection purposes.
-        # Never raise on failure — wrap in try/except so a logging failure cannot abort a login.
-        pass
+        try:
+            audit = LoginAudit(
+                user_id=user_id,
+                ip_address=ip,
+                user_agent=user_agent,
+                success=success,
+            )
+            self.session.add(audit)
+            await self.session.flush()
+        except Exception:
+            pass

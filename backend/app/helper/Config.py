@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     DB_HOST: str
     DB_PORT: int = 3306
     DB_USER: str
-    DB_PASSWORD: str
+    DB_PASSWORD: str = "password"
     DB_NAME: str
 
     # JWT
@@ -19,34 +19,34 @@ class Settings(BaseSettings):
     BROKERAGE_ENCRYPTION_KEY: str
 
     # Apple / StoreKit
-    APPLE_BUNDLE_ID: str
-    APPLE_ISSUER_ID: str
-    APPLE_KEY_ID: str
-    APPLE_PRIVATE_KEY_PATH: str
+    APPLE_BUNDLE_ID: str = "com.twintrades.app"
+    APPLE_ISSUER_ID: str = ""
+    APPLE_KEY_ID: str = ""
+    APPLE_PRIVATE_KEY_PATH: str = "secrets/apple_private_key.p8"
     APPLE_SHARED_SECRET: str = ""
 
     # APNs
-    APNS_KEY_ID: str
-    APNS_TEAM_ID: str
-    APNS_PRIVATE_KEY_PATH: str
-    APNS_TOPIC: str
+    APNS_KEY_ID: str = ""
+    APNS_TEAM_ID: str = ""
+    APNS_PRIVATE_KEY_PATH: str = "secrets/apns_private_key.p8"
+    APNS_TOPIC: str = "com.twintrades.app"
 
     # Email (SMTP)
-    SMTP_HOST: str
+    SMTP_HOST: str = ""
     SMTP_PORT: int = 587
-    SMTP_USER: str
-    SMTP_PASS: str
-    EMAIL_FROM: str
+    SMTP_USER: str = ""
+    SMTP_PASS: str = ""
+    EMAIL_FROM: str = "noreply@twintrades.com"
 
     # Twilio (SMS 2FA)
-    TWILIO_ACCOUNT_SID: str
-    TWILIO_AUTH_TOKEN: str
-    TWILIO_FROM_NUMBER: str
+    TWILIO_ACCOUNT_SID: str = ""
+    TWILIO_AUTH_TOKEN: str = ""
+    TWILIO_FROM_NUMBER: str = ""
 
     # Webull
-    WEBULL_APP_KEY: str
-    WEBULL_APP_SECRET: str
-    WEBULL_REDIRECT_URI: str
+    WEBULL_APP_KEY: str = ""
+    WEBULL_APP_SECRET: str = ""
+    WEBULL_REDIRECT_URI: str = ""
 
     # Alpaca (stub)
     ALPACA_CLIENT_ID: str = ""

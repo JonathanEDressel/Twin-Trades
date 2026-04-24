@@ -1,7 +1,10 @@
+from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.controllers.RebalanceDbContext import RebalanceDbContext
 from app.controllers.PortfolioDbContext import PortfolioDbContext
-from app.models.TradeModel import RebalanceEvent
+from app.models.TradeModel import RebalanceEvent, RebalanceEventStatus
+from app.schemas.Rebalance import PendingRebalanceResponse, RebalanceHoldingSnapshot, ConfirmRebalanceResponse
+from app.helper.ErrorHandler import NotFoundError, ForbiddenError
 
 
 class RebalanceService:
@@ -17,17 +20,54 @@ class RebalanceService:
         # Fan out push notifications via PushService to all enrolled users awaiting confirmation.
         pass
 
-    async def confirm(self, event_id: int, user_id: int) -> RebalanceEvent:
-        # Validate the event is still pending and belongs to a portfolio the user follows.
-        # Update status to "confirmed" and enqueue trade execution via TradeService.execute_rebalance.
-        # Raise NotFoundError if the event is expired, rejected, or already confirmed by this user.
-        pass
+    async def list_pending(self, user_id: int) -> list[PendingRebalanceResponse]:
+        events = await self.rebalance_db.find_pending_for_user(user_id)
+        result = []
+        for event in events:
+            holdings = await self.rebalance_db.find_event_holdings(event.id)
+            result.append(PendingRebalanceResponse(
+                id=event.id,
+                portfolio_id=event.portfolio_id,
+                deep_link=event.deep_link,
+                expires_at=event.expires_at,
+                holdings=[RebalanceHoldingSnapshot.model_validate(h) for h in holdings],
+                created_at=event.created_at,
+            ))
+        return result
 
-    async def reject(self, event_id: int, user_id: int) -> RebalanceEvent:
-        # Mark the event as rejected for this user; other users can still confirm their own events.
-        # Log the rejection to change_log via ChangeLogService.record for admin audit.
-        # Raise NotFoundError if the event does not exist or is already past the pending state.
-        pass
+    async def confirm(self, event_id: int, user_id: int) -> ConfirmRebalanceResponse:
+        event = await self.rebalance_db.find_by_id(event_id)
+        if event is None or event.status != RebalanceEventStatus.pending_confirmation:
+            raise NotFoundError("Rebalance not found or no longer pending")
+        membership = await self.portfolio_db.find_user_portfolio(user_id, event.portfolio_id)
+        if membership is None:
+            raise ForbiddenError("You are not a member of this portfolio")
+        await self.rebalance_db.set_status(
+            event_id,
+            RebalanceEventStatus.confirmed,
+            confirmed_at=datetime.now(timezone.utc),
+        )
+        await self.session.commit()
+        return ConfirmRebalanceResponse(
+            event_id=event_id,
+            status="confirmed",
+            message="Rebalance confirmed. Trades queued.",
+        )
+
+    async def reject(self, event_id: int, user_id: int) -> ConfirmRebalanceResponse:
+        event = await self.rebalance_db.find_by_id(event_id)
+        if event is None or event.status != RebalanceEventStatus.pending_confirmation:
+            raise NotFoundError("Rebalance not found or no longer pending")
+        membership = await self.portfolio_db.find_user_portfolio(user_id, event.portfolio_id)
+        if membership is None:
+            raise ForbiddenError("You are not a member of this portfolio")
+        await self.rebalance_db.set_status(event_id, RebalanceEventStatus.rejected)
+        await self.session.commit()
+        return ConfirmRebalanceResponse(
+            event_id=event_id,
+            status="rejected",
+            message="Rebalance rejected.",
+        )
 
     async def expire_pending(self) -> int:
         # Fetch all rebalance events where status = "pending_confirmation" and expires_at < now().

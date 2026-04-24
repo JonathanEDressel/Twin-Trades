@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 from datetime import datetime
 from app.models.UserModel import UserRole, RebalanceConfirmation
 
@@ -7,7 +7,7 @@ class UserResponse(BaseModel):
     model_config = {"from_attributes": True}
 
     id: int
-    email: EmailStr
+    email: str
     username: str
     display_name: str | None
     avatar_url: str | None
