@@ -7,6 +7,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { router } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   fetchPendingRebalances,
@@ -103,7 +104,11 @@ export default function DashboardScreen() {
           </View>
         }
         renderItem={({ item }: { item: Portfolio }) => (
-          <PortfolioCard portfolio={item} isFollowing />
+          <PortfolioCard
+            portfolio={item}
+            isFollowing
+            onPress={() => router.push(`/portfolio/${item.id}`)}
+          />
         )}
         ListEmptyComponent={
           !isLoading ? (
@@ -116,7 +121,7 @@ export default function DashboardScreen() {
       <RebalanceConfirmSheet
         rebalance={activeRebalance}
         visible={activeRebalance !== null}
-        onConfirm={(id) => confirmMutation.mutateAsync(id)}
+        onConfirm={(id) => confirmMutation.ync(id)}
         onReject={(id) => rejectMutation.mutateAsync(id)}
         onDismiss={() => setActiveRebalance(null)}
       />

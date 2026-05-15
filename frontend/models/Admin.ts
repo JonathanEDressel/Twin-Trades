@@ -21,8 +21,23 @@ export interface AdminUserUpdate {
   subscription_exempt?: boolean;
 }
 
+export interface AdminUser {
+  id: number;
+  email: string;
+  username: string;
+  display_name: string | null;
+  avatar_url: string | null;
+  role: import('./User').UserRole;
+  is_active: boolean;
+  subscription_exempt: boolean;
+  created_at: string;
+  subscription_status: string | null;
+  portfolio_count: number;
+  invested_amount: string;
+}
+
 export interface PaginatedUsers {
-  users: import('./User').User[];
+  users: AdminUser[];
   total: number;
   page: number;
   page_size: number;

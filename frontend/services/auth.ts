@@ -1,6 +1,6 @@
 import apiClient from '@/services/api/client';
 import { endpoints } from '@/services/api/endpoints';
-import { saveTokens, clearTokens } from '@/services/keychain';
+import { saveTokens, clearTokens, getRefreshToken } from '@/services/keychain';
 import {
   AuthToken,
   LoginPayload,
@@ -25,12 +25,15 @@ export async function register(payload: RegisterPayload): Promise<AuthToken> {
 }
 
 export async function logout(): Promise<void> {
-  await apiClient.delete(endpoints.logout());
+  const refresh_token = await getRefreshToken();
+  await apiClient.post(endpoints.logout(), { refresh_token: refresh_token ?? '' });
   await clearTokens();
 }
 
-export async function changePassword(payload: ChangePasswordPayload): Promise<void> {
-  await apiClient.post(endpoints.changePassword(), payload);
+export async function changePassword(payload: ChangePasswordPayload): Promise<AuthToken> {
+  const { data } = await apiClient.post<AuthToken>(endpoints.changePassword(), payload);
+  await saveTokens(data.access_token, data.refresh_token);
+  return data;
 }
 
 export async function forgotPassword(payload: ForgotPasswordPayload): Promise<void> {

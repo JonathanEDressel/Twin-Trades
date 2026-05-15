@@ -10,9 +10,13 @@ class AuthDbContext:
         self.session = session
 
     async def find_refresh_token(self, token_hash: str) -> RefreshToken | None:
-        # Query refresh_tokens by token_hash and return the row if it exists and is not revoked.
-        # Return None if the hash is not found — callers handle the missing case with UnauthorizedError.
-        pass
+        result = await self.session.execute(
+            select(RefreshToken).where(
+                RefreshToken.token_hash == token_hash,
+                RefreshToken.revoked_at.is_(None),
+            )
+        )
+        return result.scalar_one_or_none()
 
     async def insert_refresh_token(self, user_id: int, token_hash: str, expires_at: datetime) -> RefreshToken:
         token = RefreshToken(user_id=user_id, token_hash=token_hash, expires_at=expires_at)
@@ -21,8 +25,7 @@ class AuthDbContext:
         return token
 
     async def revoke_all_refresh_tokens(self, user_id: int) -> int:
-        # Set revoked_at = now() on all non-revoked refresh tokens for the given user_id.
-        # Return the count of rows updated so the caller can log how many sessions were ended.
+        print("REVOKING TOKENS: ", user_id)
         result = await self.session.execute(
             update(RefreshToken)
             .where(
@@ -34,19 +37,43 @@ class AuthDbContext:
         return result.rowcount
 
     async def find_otp_token(self, user_id: int, purpose: str) -> OtpToken | None:
-        # Return the most recent non-expired, non-used OTP row for this user+purpose combination.
-        # Order by created_at DESC and return only the first result.
-        pass
+        now = datetime.now(timezone.utc)
+        result = await self.session.execute(
+            select(OtpToken)
+            .where(
+                OtpToken.user_id == user_id,
+                OtpToken.purpose == purpose,
+                OtpToken.used_at.is_(None),
+                OtpToken.expires_at > now,
+            )
+            .order_by(OtpToken.created_at.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
 
     async def insert_otp_token(self, user_id: int, otp_hash: str, purpose: str, expires_at: datetime) -> OtpToken:
-        # Insert a new otp_tokens row with the bcrypt-hashed OTP value and expiry timestamp.
-        # Flush and return the new object — callers must call session.commit() after dispatch succeeds.
-        pass
+        token = OtpToken(user_id=user_id, otp_hash=otp_hash, purpose=purpose, expires_at=expires_at)
+        self.session.add(token)
+        await self.session.flush()
+        return token
 
     async def mark_otp_used(self, otp_id: int) -> None:
-        # Set used_at = now() on the given OTP row to prevent replay attacks.
-        # This must be called inside the same transaction as the action the OTP authorizes.
-        pass
+        await self.session.execute(
+            update(OtpToken)
+            .where(OtpToken.id == otp_id)
+            .values(used_at=datetime.now(timezone.utc))
+        )
+
+    async def invalidate_otps(self, user_id: int, purpose: str) -> None:
+        await self.session.execute(
+            update(OtpToken)
+            .where(
+                OtpToken.user_id == user_id,
+                OtpToken.purpose == purpose,
+                OtpToken.used_at.is_(None),
+            )
+            .values(used_at=datetime.now(timezone.utc))
+        )
 
     async def insert_login_audit(self, user_id: int | None, ip: str | None, user_agent: str | None, success: bool) -> None:
         try:

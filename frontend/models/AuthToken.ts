@@ -30,17 +30,16 @@ export interface ForgotPasswordPayload {
 }
 
 export interface ResetPasswordPayload {
+  email: string;
   token: string;
   new_password: string;
 }
 
 export interface RequestOtpPayload {
-  email: string;
-  purpose: 'login_2fa' | 'password_reset';
+  purpose: 'login_2fa';
 }
 
 export interface VerifyOtpPayload {
-  email: string;
   otp: string;
   purpose: 'login_2fa' | 'password_reset';
 }

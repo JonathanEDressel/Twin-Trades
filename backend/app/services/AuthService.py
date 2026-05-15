@@ -4,8 +4,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.controllers.AuthDbContext import AuthDbContext
 from app.controllers.UserDbContext import UserDbContext
 from app.helper.Security import Security, REFRESH_TOKEN_EXPIRE_DAYS
-from app.helper.ErrorHandler import UnauthorizedError, ConflictError
-from app.schemas.Auth import LoginPayload, RegisterPayload, RefreshPayload, TokenResponse
+from app.helper.ErrorHandler import UnauthorizedError, ConflictError, BadRequestError
+from app.integrations.Mailer import send_email
+from app.schemas.Auth import LoginPayload, RegisterPayload, RefreshPayload, TokenResponse, ChangePasswordPayload
 
 
 class AuthService:
@@ -69,39 +70,113 @@ class AuthService:
         return TokenResponse(access_token=access_token, refresh_token=raw_refresh)
 
     async def refresh_tokens(self, payload: RefreshPayload) -> TokenResponse:
-        # Validate the refresh token hash against the DB and check it is not expired or revoked.
-        # Rotate: revoke the old token and issue a new access+refresh pair atomically.
-        # Raise UnauthorizedError if the token is not found, revoked, or past expires_at.
-        pass
+        token_hash = Security.hash_refresh_token(payload.refresh_token)
+        token = await self.auth_db.find_refresh_token(token_hash)
+        if token is None:
+            raise UnauthorizedError("Invalid or expired refresh token")
+        if token.expires_at.replace(tzinfo=timezone.utc) < datetime.now(timezone.utc):
+            raise UnauthorizedError("Refresh token expired")
+
+        user = await self.user_db.find_by_id(token.user_id)
+        if user is None:
+            raise UnauthorizedError("User not found")
+
+        await self.auth_db.revoke_all_refresh_tokens(user.id)
+
+        claims = {"sub": str(user.id), "role": user.role.value}
+        access_token = Security.sign_jwt(claims)
+        raw_refresh = secrets.token_urlsafe(32)
+        new_hash = Security.hash_refresh_token(raw_refresh)
+        expires_at = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+        await self.auth_db.insert_refresh_token(user.id, new_hash, expires_at)
+        await self.session.commit()
+        return TokenResponse(access_token=access_token, refresh_token=raw_refresh)
+
+    async def change_password(self, payload: ChangePasswordPayload, user) -> TokenResponse:
+        if not Security.verify_password(payload.current_password, user.password_hash):
+            raise BadRequestError("Current password is incorrect")
+        new_hash = Security.hash_password(payload.new_password)
+        await self.user_db.update_by_id(user.id, password_hash=new_hash, must_change_password=False)
+        await self.auth_db.revoke_all_refresh_tokens(user.id)
+
+        claims = {"sub": str(user.id), "role": user.role.value}
+        access_token = Security.sign_jwt(claims)
+        raw_refresh = secrets.token_urlsafe(32)
+        token_hash = Security.hash_refresh_token(raw_refresh)
+        expires_at = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+        await self.auth_db.insert_refresh_token(user.id, token_hash, expires_at)
+        await self.session.commit()
+
+        return TokenResponse(access_token=access_token, refresh_token=raw_refresh)
 
     async def logout(self, payload: RefreshPayload, user_id: int) -> None:
         await self.auth_db.revoke_all_refresh_tokens(user_id)
         await self.session.commit()
 
-    async def request_otp(self, user_id: int) -> None:
-        # Generate a 6-digit OTP, hash it, insert into otp_tokens with a 10-minute TTL.
-        # Dispatch via the user's rebalance_confirmation channel (email or SMS).
-        # Invalidate any previous non-expired OTPs for this user and purpose before inserting.
-        pass
+    async def request_otp(self, user_id: int, purpose: str) -> None:
+        user = await self.user_db.find_by_id(user_id)
+        if user is None:
+            raise UnauthorizedError("User not found")
+
+        await self.auth_db.invalidate_otps(user_id, purpose)
+
+        raw_otp = Security.generate_otp()
+        otp_hash = Security.hash_otp(raw_otp)
+        expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
+        await self.auth_db.insert_otp_token(user_id, otp_hash, purpose, expires_at)
+
+        html = (
+            f"<p>Your verification code is: <strong>{raw_otp}</strong></p>"
+            f"<p>This code expires in 10 minutes. Do not share it with anyone.</p>"
+        )
+        await send_email(user.email, "Your verification code", html)
+        await self.session.commit()
 
     async def verify_otp(self, user_id: int, otp: str, purpose: str) -> bool:
-        # Retrieve the most recent non-expired OTP row for this user+purpose.
-        # Call Security.verify_otp for constant-time comparison; mark used on match.
-        # Return True on success; raise BadRequestError on mismatch, expiry, or not found.
-        pass
+        row = await self.auth_db.find_otp_token(user_id, purpose)
+        if row is None or not Security.verify_otp(otp, row.otp_hash):
+            raise BadRequestError("Invalid or expired code")
+        await self.auth_db.mark_otp_used(row.id)
+        await self.session.commit()
+        return True
 
-    async def change_password(self, user_id: int, current_password: str, new_password: str) -> None:
+    # async def change_password(self, user_id: int, current_password: str, new_password: str) -> None:
         # Verify current_password against the stored hash to authorize the change.
         # Hash the new password and save it; then revoke all refresh tokens and clear must_change_password.
         # Raise UnauthorizedError if current_password is wrong.
-        pass
+        # pass
 
     async def forgot_password(self, email: str) -> None:
-        # Look up user by email; if not found, return silently to avoid enumeration.
-        # Generate OTP with purpose="password_reset" and send via EmailService.send_otp.
-        pass
+        user = await self.user_db.find_by_email(email)
+        if user is None:
+            return
 
-    async def reset_password(self, token: str, new_password: str) -> None:
-        # Validate the OTP token, hash the new password, update the user row, and revoke all tokens.
-        # Mark the OTP as used and raise BadRequestError if it is expired, used, or invalid.
-        pass
+        await self.auth_db.invalidate_otps(user.id, "password_reset")
+
+        raw_otp = Security.generate_otp()
+        otp_hash = Security.hash_otp(raw_otp)
+        expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
+        await self.auth_db.insert_otp_token(user.id, otp_hash, "password_reset", expires_at)
+
+        html = (
+            f"<p>Your password reset code is: <strong>{raw_otp}</strong></p>"
+            f"<p>This code expires in 10 minutes. If you did not request a reset, ignore this email.</p>"
+        )
+        await send_email(user.email, "Reset your password", html)
+        await self.session.commit()
+
+    async def reset_password(self, email: str, token: str, new_password: str) -> None:
+        _INVALID = "Invalid or expired reset code"
+        user = await self.user_db.find_by_email(email)
+        if user is None:
+            raise BadRequestError(_INVALID)
+
+        row = await self.auth_db.find_otp_token(user.id, "password_reset")
+        if row is None or not Security.verify_otp(token, row.otp_hash):
+            raise BadRequestError(_INVALID)
+
+        await self.auth_db.mark_otp_used(row.id)
+        new_hash = Security.hash_password(new_password)
+        await self.user_db.update_by_id(user.id, password_hash=new_hash, must_change_password=False)
+        await self.auth_db.revoke_all_refresh_tokens(user.id)
+        await self.session.commit()

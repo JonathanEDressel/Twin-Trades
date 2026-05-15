@@ -8,6 +8,7 @@ from app.models.Base import Base
 
 
 class UserRole(str, enum.Enum):
+    ultimate_admin = "ultimate_admin"
     admin = "admin"
     user = "user"
 

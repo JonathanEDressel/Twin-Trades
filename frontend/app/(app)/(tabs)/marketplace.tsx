@@ -91,7 +91,7 @@ export default function MarketplaceScreen() {
             isFollowing={myPortfolioIds.has(item.id)}
             onPress={() => {
               if (myPortfolioIds.has(item.id)) {
-                // Navigate to detail (push)
+                router.push(`/portfolio/${item.id}`);
               } else {
                 handleJoin(item);
               }

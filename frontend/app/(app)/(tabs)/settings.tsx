@@ -69,6 +69,7 @@ export default function SettingsScreen() {
   }
 
   async function handleDeleteAccount() {
+    console.warn('Delete account initiated');
     Alert.alert(
       'Delete Account',
       'Are you sure? This action is permanent and cannot be undone.',

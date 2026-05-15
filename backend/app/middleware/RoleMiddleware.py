@@ -5,7 +5,8 @@ from typing import Callable
 
 
 def require_role(*roles: str) -> Callable:
-    # Return a FastAPI dependency that checks current_user.role is in the allowed roles list.
-    # Raise ForbiddenError immediately if the role is not permitted — this is the first of two gates.
-    # Services perform a second independent role check; both must pass for destructive operations.
-    pass
+    async def dependency(current_user=Depends(get_current_user)):
+        if current_user.role.value not in roles:
+            raise ForbiddenError(f"Requires role: {', '.join(roles)}")
+        return current_user
+    return dependency

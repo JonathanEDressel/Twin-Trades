@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Request, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.helper.Database import get_session
-from app.middleware.AuthMiddleware import get_current_user
+from app.middleware.AuthMiddleware import get_current_user, get_current_user_any_scope
 from app.middleware.RateLimiters import auth_limiter
 from app.services.AuthService import AuthService
 from app.schemas.Auth import (
-    LoginPayload, RegisterPayload, OtpPayload,
+    LoginPayload, RegisterPayload, OtpPayload, RequestOtpPayload,
     ChangePasswordPayload, ForgotPasswordPayload,
     ResetPasswordPayload, RefreshPayload, TokenResponse
 )
@@ -27,13 +27,10 @@ async def register(request: Request, body: RegisterPayload, session: AsyncSessio
     return await AuthService(session).register(body)
 
 
-@router.post("/refresh")
+@router.post("/refresh", response_model=TokenResponse)
 @auth_limiter
 async def refresh(request: Request, body: RefreshPayload, session: AsyncSession = Depends(get_session)):
-    # Validate the refresh token hash against the DB, check expiry, and issue new token pair.
-    # Rotate the refresh token (revoke old, insert new) to limit the blast radius of token leaks.
-    # Raise UnauthorizedError if the token is not found, expired, or already revoked.
-    pass
+    return await AuthService(session).refresh_tokens(body)
 
 
 @router.post("/logout")
@@ -43,40 +40,29 @@ async def logout(body: RefreshPayload, current_user=Depends(get_current_user), s
 
 
 @router.post("/request-otp")
-async def request_otp(current_user=Depends(get_current_user), session: AsyncSession = Depends(get_session)):
-    # Generate a 6-digit OTP via Security.generate_otp and hash it before storage.
-    # Dispatch the OTP via the user's preferred 2FA channel (email or SMS) via AuthService.
-    # Invalidate any previous unused OTPs for this user and purpose before inserting the new one.
-    pass
+async def request_otp(body: RequestOtpPayload, current_user=Depends(get_current_user), session: AsyncSession = Depends(get_session)):
+    await AuthService(session).request_otp(current_user.id, body.purpose)
+    return {"message": "Code sent"}
 
 
 @router.post("/verify-otp")
 async def verify_otp(body: OtpPayload, current_user=Depends(get_current_user), session: AsyncSession = Depends(get_session)):
-    # Retrieve the most recent non-expired OTP for this user and purpose from the DB.
-    # Verify the submitted OTP against the hash using Security.verify_otp; mark it used on match.
-    # Raise BadRequestError if expired, already used, or does not match — never reveal which.
-    pass
+    await AuthService(session).verify_otp(current_user.id, body.otp, body.purpose)
+    return {"message": "Verified"}
 
 
-@router.post("/change-password")
-async def change_password(body: ChangePasswordPayload, current_user=Depends(get_current_user), session: AsyncSession = Depends(get_session)):
-    # Accept tokens with scope "change_password_only" (forced change) or standard scope.
-    # Verify current_password against the stored hash before allowing the update.
-    # After saving the new hash, revoke all refresh tokens and clear the must_change_password flag.
-    pass
+@router.post("/change-password", response_model=TokenResponse)
+async def change_password(body: ChangePasswordPayload, current_user=Depends(get_current_user_any_scope), session: AsyncSession = Depends(get_session)):
+    return await AuthService(session).change_password(body, current_user)
 
 
 @router.post("/forgot-password")
 async def forgot_password(request: Request, body: ForgotPasswordPayload, session: AsyncSession = Depends(get_session)):
-    # Look up the user by email; if not found, still return 200 to prevent email enumeration.
-    # Generate a short-lived OTP and send it via AuthService.forgot_password (email channel).
-    # Store the hashed OTP with purpose="password_reset" and a 10-minute TTL.
-    pass
+    await AuthService(session).forgot_password(body.email)
+    return {"message": "If that email exists, a reset code has been sent."}
 
 
 @router.post("/reset-password")
 async def reset_password(body: ResetPasswordPayload, session: AsyncSession = Depends(get_session)):
-    # Verify the OTP token from the reset email and confirm it is within its TTL.
-    # Hash and save the new password, then mark the OTP as used and revoke all refresh tokens.
-    # Raise BadRequestError if the token is invalid, expired, or already consumed.
-    pass
+    await AuthService(session).reset_password(body.email, body.token, body.new_password)
+    return {"message": "Password reset successfully"}

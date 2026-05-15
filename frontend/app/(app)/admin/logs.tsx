@@ -1,10 +1,12 @@
 import React from 'react';
+import { router } from 'expo-router';
 import {
   FlatList,
   RefreshControl,
   SafeAreaView,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from 'react-native';
 import { useInfiniteQuery } from '@tanstack/react-query';
@@ -29,6 +31,11 @@ export default function AdminLogsScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
+      <View style={styles.backBar}>
+        <TouchableOpacity onPress={() => router.back()}>
+          <Text style={styles.backText}>‹ Back</Text>
+        </TouchableOpacity>
+      </View>
       {isLoading && <LoadingOverlay />}
 
       <FlatList
@@ -81,4 +88,6 @@ const styles = StyleSheet.create({
   message: { ...typography.body, color: colors.textPrimary },
   detail: { ...typography.caption, color: colors.textMuted, marginTop: spacing.xs },
   empty: { ...typography.body, color: colors.textMuted, textAlign: 'center', marginTop: spacing.xl },
+  backBar: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
+  backText: { ...typography.body, color: colors.accent },
 });

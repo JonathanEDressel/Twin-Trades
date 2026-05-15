@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import {
+  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -65,6 +66,11 @@ export default function LoginScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+        <Image
+          source={require('@/assets/twin-trades-logo.png')}
+          style={styles.logo}
+          resizeMode="contain"
+        />
         <Text style={styles.title}>Welcome back</Text>
         <Text style={styles.subtitle}>Sign in to TwinTrades</Text>
 
@@ -82,6 +88,8 @@ export default function LoginScreen() {
           placeholder="Password"
           placeholderTextColor={colors.textMuted}
           secureTextEntry
+          autoCapitalize="none"
+          autoCorrect={false}
           value={password}
           onChangeText={setPassword}
           onSubmitEditing={handleLogin}
@@ -122,6 +130,7 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     justifyContent: 'center',
   },
+  logo: { width: 120, height: 120, alignSelf: 'center', marginBottom: spacing.lg },
   title: { ...typography.title, color: colors.textPrimary, marginBottom: spacing.xs },
   subtitle: { ...typography.body, color: colors.textMuted, marginBottom: spacing.xl },
   input: {

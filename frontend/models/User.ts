@@ -10,6 +10,7 @@ export interface User {
   role: UserRole;
   rebalance_confirmation: RebalanceConfirmation;
   is_active: boolean;
+  subscription_exempt: boolean;
   created_at: string;
 }
 

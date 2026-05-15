@@ -57,6 +57,8 @@ class UserDbContext:
         return user
 
     async def update_device_tokens(self, user_id: int, apns_device_token: str) -> None:
-        # Update only the apns_device_token column for the given user — no other fields change.
-        # Used by the iOS app after each launch to keep the push token current.
-        pass
+        await self.session.execute(
+            update(User)
+            .where(User.id == user_id, User.deleted_at.is_(None))
+            .values(apns_device_token=apns_device_token)
+        )

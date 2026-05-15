@@ -1,5 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update
+from sqlalchemy import select, update, delete
+from datetime import datetime, timezone
 from app.models.PortfolioModel import Portfolio, PortfolioHolding, UserPortfolio
 
 
@@ -9,14 +10,21 @@ class PortfolioDbContext:
         self.session = session
 
     async def find_all_active(self) -> list[Portfolio]:
-        # Return all portfolios where is_active = True, ordered by name ASC.
-        # Eagerly load holdings for each portfolio so callers don't trigger lazy-load errors.
-        pass
+        result = await self.session.execute(
+            select(Portfolio)
+            .where(Portfolio.is_active == True)
+            .order_by(Portfolio.name.asc())
+        )
+        return list(result.scalars().all())
 
     async def find_by_id(self, portfolio_id: int) -> Portfolio | None:
-        # Fetch a single portfolio by primary key; return None if not found or is_active = False.
-        # Eagerly load holdings in the same query to avoid N+1.
-        pass
+        result = await self.session.execute(
+            select(Portfolio).where(
+                Portfolio.id == portfolio_id,
+                Portfolio.is_active == True,
+            )
+        )
+        return result.scalar_one_or_none()
 
     async def find_holdings(self, portfolio_id: int) -> list[PortfolioHolding]:
         result = await self.session.execute(
@@ -27,10 +35,16 @@ class PortfolioDbContext:
         return list(result.scalars().all())
 
     async def replace_holdings(self, portfolio_id: int, holdings: list[dict]) -> None:
-        # Delete all existing holdings for the portfolio, then bulk-insert the new list.
-        # Each dict in holdings has keys: ticker (str), target_pct (Decimal).
-        # Wrap both operations in a single transaction — never leave the portfolio with zero holdings.
-        pass
+        await self.session.execute(
+            delete(PortfolioHolding).where(PortfolioHolding.portfolio_id == portfolio_id)
+        )
+        for h in holdings:
+            self.session.add(PortfolioHolding(
+                portfolio_id=portfolio_id,
+                ticker=str(h["ticker"]).upper(),
+                target_pct=h["target_pct"],
+            ))
+        await self.session.flush()
 
     async def find_user_portfolio(self, user_id: int, portfolio_id: int) -> UserPortfolio | None:
         result = await self.session.execute(
@@ -54,16 +68,35 @@ class PortfolioDbContext:
         return list(result.scalars().all())
 
     async def find_syncing_users(self, portfolio_id: int) -> list[int]:
-        # Return a list of user_ids that are actively following the given portfolio.
-        # Used by TradeService to fan out rebalance orders to each enrolled user.
-        pass
+        result = await self.session.execute(
+            select(UserPortfolio.user_id).where(
+                UserPortfolio.portfolio_id == portfolio_id,
+                UserPortfolio.left_at.is_(None),
+            )
+        )
+        return list(result.scalars().all())
 
     async def insert_user_portfolio(self, user_id: int, portfolio_id: int) -> UserPortfolio:
-        # Insert a new user_portfolios row with joined_at = now() and left_at = None.
-        # Flush and return the new object.
-        pass
+        up = UserPortfolio(user_id=user_id, portfolio_id=portfolio_id)
+        self.session.add(up)
+        await self.session.flush()
+        return up
 
     async def update_portfolio(self, portfolio_id: int, **kwargs) -> Portfolio | None:
-        # Apply keyword-argument field updates to the portfolio row via SQLAlchemy update().
-        # Return the updated Portfolio object, or None if portfolio_id does not exist.
-        pass
+        await self.session.execute(
+            update(Portfolio).where(Portfolio.id == portfolio_id).values(**kwargs)
+        )
+        await self.session.flush()
+        return await self.find_by_id(portfolio_id)
+
+    async def set_user_portfolio_left_at(self, user_id: int, portfolio_id: int) -> None:
+        await self.session.execute(
+            update(UserPortfolio)
+            .where(
+                UserPortfolio.user_id == user_id,
+                UserPortfolio.portfolio_id == portfolio_id,
+                UserPortfolio.left_at.is_(None),
+            )
+            .values(left_at=datetime.now(timezone.utc))
+        )
+        await self.session.flush()

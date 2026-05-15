@@ -1,4 +1,5 @@
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, update, desc
 from datetime import datetime
 from app.models.BrokerageModel import BrokerageConnection
 
@@ -9,25 +10,48 @@ class BrokerageDbContext:
         self.session = session
 
     async def find_by_user(self, user_id: int) -> list[BrokerageConnection]:
-        # Return all active (is_active = True) brokerage connections for the given user_id.
-        # Order by created_at DESC.
-        pass
+        result = await self.session.execute(
+            select(BrokerageConnection)
+            .where(BrokerageConnection.user_id == user_id, BrokerageConnection.is_active == True)
+            .order_by(desc(BrokerageConnection.created_at))
+        )
+        return list(result.scalars().all())
 
     async def find_by_id(self, connection_id: int) -> BrokerageConnection | None:
-        # Return a single BrokerageConnection by primary key, or None if not found / inactive.
-        pass
+        result = await self.session.execute(
+            select(BrokerageConnection)
+            .where(BrokerageConnection.id == connection_id, BrokerageConnection.is_active == True)
+        )
+        return result.scalar_one_or_none()
 
     async def insert(self, user_id: int, brokerage_slug: str, access_token_enc: str, refresh_token_enc: str | None, token_expires_at: datetime | None, account_id: str | None) -> BrokerageConnection:
-        # Insert a new BrokerageConnection row with encrypted token values.
-        # Flush and return the new ORM object.
-        pass
+        conn = BrokerageConnection(
+            user_id=user_id,
+            brokerage_slug=brokerage_slug,
+            access_token_enc=access_token_enc,
+            refresh_token_enc=refresh_token_enc,
+            token_expires_at=token_expires_at,
+            account_id=account_id,
+        )
+        self.session.add(conn)
+        await self.session.flush()
+        return conn
 
     async def update_tokens(self, connection_id: int, access_token_enc: str, refresh_token_enc: str | None, token_expires_at: datetime | None) -> None:
-        # UPDATE the encrypted token columns and token_expires_at for the given connection.
-        # Called by the token refresh job and the OAuth callback handler.
-        pass
+        values: dict = {"access_token_enc": access_token_enc}
+        if refresh_token_enc is not None:
+            values["refresh_token_enc"] = refresh_token_enc
+        if token_expires_at is not None:
+            values["token_expires_at"] = token_expires_at
+        await self.session.execute(
+            update(BrokerageConnection)
+            .where(BrokerageConnection.id == connection_id)
+            .values(**values)
+        )
 
     async def deactivate(self, connection_id: int) -> None:
-        # Set is_active = False on the given connection row.
-        # Does not delete the row — keeps the audit trail intact.
-        pass
+        await self.session.execute(
+            update(BrokerageConnection)
+            .where(BrokerageConnection.id == connection_id)
+            .values(is_active=False)
+        )

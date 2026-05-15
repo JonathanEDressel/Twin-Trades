@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import {
+  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -74,6 +75,11 @@ export default function RegisterScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+        <Image
+          source={require('@/assets/twin-trades-logo.png')}
+          style={styles.logo}
+          resizeMode="contain"
+        />
         <Text style={styles.title}>Create account</Text>
         <Text style={styles.subtitle}>Join TwinTrades today</Text>
 
@@ -146,6 +152,7 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     justifyContent: 'center',
   },
+  logo: { width: 120, height: 120, alignSelf: 'center', marginBottom: spacing.lg },
   title: { ...typography.title, color: colors.textPrimary, marginBottom: spacing.xs },
   subtitle: { ...typography.body, color: colors.textMuted, marginBottom: spacing.xl },
   input: {

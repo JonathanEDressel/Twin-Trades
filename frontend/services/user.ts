@@ -4,7 +4,6 @@ import { User, UserUpdatePayload } from '@/models/User';
 
 export async function fetchMe(): Promise<User> {
   const { data } = await apiClient.get<User>(endpoints.me());
-  console.log('Fetched user data:', data);
   return data;
 }
 

@@ -1,4 +1,5 @@
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func, and_
 from datetime import datetime
 from app.models.TradeModel import Trade, TradeStatus
 
@@ -9,10 +10,39 @@ class TradeDbContext:
         self.session = session
 
     async def find_user_trades(self, user_id: int, page: int, page_size: int, **filters) -> tuple[list[Trade], int]:
-        # Return paginated trades for the given user_id with optional filters applied.
-        # Filters may include: ticker, action, status, created_after, created_before.
-        # Return (rows, total_count) tuple for pagination metadata.
-        pass
+        conditions = [Trade.user_id == user_id]
+
+        if ticker := filters.get("ticker"):
+            conditions.append(Trade.ticker == ticker.upper())
+
+        if action := filters.get("action"):
+            conditions.append(Trade.action == action)
+
+        if status := filters.get("status"):
+            conditions.append(Trade.status == status)
+
+        if created_after := filters.get("created_after"):
+            conditions.append(Trade.created_at >= created_after)
+
+        if created_before := filters.get("created_before"):
+            conditions.append(Trade.created_at <= created_before)
+
+        where_clause = and_(*conditions)
+
+        count_result = await self.session.execute(
+            select(func.count()).select_from(Trade).where(where_clause)
+        )
+        total = count_result.scalar_one()
+
+        rows_result = await self.session.execute(
+            select(Trade)
+            .where(where_clause)
+            .order_by(Trade.created_at.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+
+        return list(rows_result.scalars().all()), total
 
     async def insert_trade(self, user_id: int, rebalance_event_id: int | None, brokerage_connection_id: int | None, ticker: str, action: str, quantity, price=None) -> Trade:
         # Insert a new Trade row with status = "pending" and return the flushed object.

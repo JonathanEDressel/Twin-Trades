@@ -1,18 +1,30 @@
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
+from decimal import Decimal
+from datetime import datetime, timezone
 from app.helper.Database import get_session
 from app.middleware.AuthMiddleware import get_current_user
 from app.schemas.Subscription import SubscriptionResponse, VerifyApplePayload
+from app.controllers.SubscriptionDbContext import SubscriptionDbContext
+from app.models.SubscriptionModel import SubscriptionPlan, SubscriptionStatus
 
 router = APIRouter(prefix="/subscriptions", tags=["subscriptions"])
 
 
 @router.get("/status", response_model=SubscriptionResponse | None)
 async def get_status(current_user=Depends(get_current_user), session: AsyncSession = Depends(get_session)):
-    # Return the user's currently active subscription record, or None if they have no subscription.
-    # subscription_exempt users always get a synthetic "active" response without a DB row.
-    # Call SubscriptionService.is_active to resolve exemptions and grace-period logic.
-    pass
+    if current_user.subscription_exempt:
+        return SubscriptionResponse(
+            id=0,
+            plan=SubscriptionPlan.lifetime,
+            status=SubscriptionStatus.active,
+            apple_transaction_id="exempt",
+            amount_paid=Decimal("0"),
+            currency="USD",
+            expires_at=None,
+            created_at=datetime.now(timezone.utc),
+        )
+    return await SubscriptionDbContext(session).find_active_for_user(current_user.id)
 
 
 @router.post("/verify-apple", response_model=SubscriptionResponse)

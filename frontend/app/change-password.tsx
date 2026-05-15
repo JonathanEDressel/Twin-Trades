@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import {
+  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -59,6 +60,11 @@ export default function ChangePasswordScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+        <Image
+          source={require('@/assets/twin-trades-logo.png')}
+          style={styles.logo}
+          resizeMode="contain"
+        />
         <Text style={styles.title}>Change password</Text>
         <Text style={styles.subtitle}>
           Your account requires a password change before continuing.
@@ -104,6 +110,7 @@ export default function ChangePasswordScreen() {
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: colors.primary },
   container: { flexGrow: 1, padding: spacing.lg, justifyContent: 'center' },
+  logo: { width: 120, height: 120, alignSelf: 'center', marginBottom: spacing.lg },
   title: { ...typography.title, color: colors.textPrimary, marginBottom: spacing.xs },
   subtitle: { ...typography.body, color: colors.textMuted, marginBottom: spacing.xl },
   input: {

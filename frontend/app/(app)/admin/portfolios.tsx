@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { router } from 'expo-router';
 import {
   Alert,
   FlatList,
@@ -74,6 +75,11 @@ export default function AdminPortfoliosScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
+      <View style={styles.backBar}>
+        <TouchableOpacity onPress={() => router.back()}>
+          <Text style={styles.backText}>‹ Back</Text>
+        </TouchableOpacity>
+      </View>
       {isLoading && <LoadingOverlay />}
 
       <FlatList
@@ -90,15 +96,15 @@ export default function AdminPortfoliosScreen() {
             <View style={styles.rowLeft}>
               <Text style={styles.name}>{item.name}</Text>
               <Text style={styles.meta}>
-                {item.is_public ? 'Public' : 'Private'} ·{' '}
-                {item.total_return != null
-                  ? `${item.total_return >= 0 ? '+' : ''}${item.total_return.toFixed(2)}%`
+                {item.is_active ? 'Public' : 'Private'} ·{' '}
+                {item.total_return_pct != null
+                  ? `${parseFloat(item.total_return_pct) >= 0 ? '+' : ''}${parseFloat(item.total_return_pct).toFixed(2)}%`
                   : '—'}
               </Text>
             </View>
             <View style={styles.actions}>
               <TouchableOpacity onPress={() => toggleMutation.mutate(item.id)}>
-                <Text style={styles.toggleBtn}>{item.is_public ? 'Hide' : 'Show'}</Text>
+                <Text style={styles.toggleBtn}>{item.is_active ? 'Hide' : 'Show'}</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={() => confirmDelete(item)}>
                 <Text style={styles.deleteBtn}>Delete</Text>
@@ -141,4 +147,6 @@ const styles = StyleSheet.create({
   toggleBtn: { ...typography.body, color: colors.accent },
   deleteBtn: { ...typography.body, color: colors.danger },
   empty: { ...typography.body, color: colors.textMuted, textAlign: 'center', marginTop: spacing.xl },
+  backBar: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
+  backText: { ...typography.body, color: colors.accent },
 });

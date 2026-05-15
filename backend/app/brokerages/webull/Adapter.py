@@ -12,31 +12,23 @@ class WebullAdapter(IBrokerageAdapter):
         self.client = WebullClient()
 
     def get_auth_url(self, state: str) -> str:
-        # Delegate directly to WebullClient.get_auth_url — no token decryption needed here.
-        pass
+        return self.client.get_auth_url(state)
 
     async def exchange_code(self, code: str) -> dict:
-        # Delegate to WebullClient.exchange_code and return the raw token dict to the caller.
-        # Encryption of the returned tokens is the caller's (BrokerageService) responsibility.
-        pass
+        return await self.client.exchange_code(code)
 
     async def refresh_token(self, refresh_token_enc: str) -> dict:
-        # Decrypt the encrypted refresh token via Security.decrypt_brokerage_token.
-        # Delegate to WebullClient.refresh_token with the plaintext token.
-        # Return the new token dict — caller must re-encrypt and save.
-        pass
+        plaintext = Security.decrypt_brokerage_token(refresh_token_enc)
+        return await self.client.refresh_token(plaintext)
 
     async def revoke_token(self, access_token_enc: str) -> None:
-        # Decrypt the encrypted access token and call WebullClient.revoke_token.
-        # Decryption and API call are the only operations in this method.
-        pass
+        plaintext = Security.decrypt_brokerage_token(access_token_enc)
+        await self.client.revoke_token(plaintext)
 
     async def place_order(self, access_token_enc: str, ticker: str, action: str, quantity: Decimal) -> dict:
-        # Decrypt the access token and delegate to WebullClient.place_order.
-        # Return the order result dict; never expose the plaintext token outside this method.
-        pass
+        plaintext = Security.decrypt_brokerage_token(access_token_enc)
+        return await self.client.place_order(plaintext, ticker, action, quantity)
 
     async def get_positions(self, access_token_enc: str) -> list[dict]:
-        # Decrypt the access token and delegate to WebullClient.get_positions.
-        # Return the positions list; the plaintext token must not be logged or returned.
-        pass
+        plaintext = Security.decrypt_brokerage_token(access_token_enc)
+        return await self.client.get_positions(plaintext)

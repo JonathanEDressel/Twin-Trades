@@ -7,7 +7,7 @@ import {
   Text,
   TextInput,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { resetPassword } from '@/services/auth';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { Toast } from '@/components/ui/Toast';
@@ -16,6 +16,7 @@ import { validatePassword } from '@/helpers/validators';
 import { ApiError } from '@/services/api/errors';
 
 export default function ResetPasswordScreen() {
+  const { email } = useLocalSearchParams<{ email: string }>();
   const [token, setToken] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -36,7 +37,7 @@ export default function ResetPasswordScreen() {
 
     setLoading(true);
     try {
-      await resetPassword({ token: token.trim(), new_password: newPassword });
+      await resetPassword({ email: email ?? '', token: token.trim(), new_password: newPassword });
       setToast({ message: 'Password reset successfully. Please sign in.', variant: 'success' });
       setTimeout(() => router.replace('/(auth)/login'), 1500);
     } catch (err) {

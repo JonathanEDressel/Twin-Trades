@@ -6,7 +6,7 @@ from app.helper.Config import settings
 import os, hashlib, base64
 
 BCRYPT_ROUNDS = 12
-ACCESS_TOKEN_EXPIRE_MINUTES = 15
+ACCESS_TOKEN_EXPIRE_MINUTES = 60
 REFRESH_TOKEN_EXPIRE_DAYS = 30
 
 
@@ -45,33 +45,31 @@ class Security:
 
     @staticmethod
     def generate_otp() -> str:
-        # Generate a cryptographically random 6-digit numeric OTP string.
-        # Uses os.urandom for entropy — never use random.randint for OTPs.
-        # Returns the raw digits; the caller is responsible for hashing before storage.
-        pass
+        return str(int.from_bytes(os.urandom(3), "big") % 1_000_000).zfill(6)
 
     @staticmethod
     def hash_otp(otp: str) -> str:
-        # Hash the OTP string with bcrypt at BCRYPT_ROUNDS for storage in otp_tokens.
-        # OTPs are short-lived (10 min) but still hashed to prevent DB-level exposure.
-        pass
+        return _bcrypt_lib.hashpw(otp.encode(), _bcrypt_lib.gensalt(rounds=BCRYPT_ROUNDS)).decode()
 
     @staticmethod
     def verify_otp(otp: str, hashed: str) -> bool:
-        # Constant-time bcrypt comparison of the submitted OTP against the stored hash.
-        # Returns False (not raises) if the OTP does not match.
-        pass
+        try:
+            return _bcrypt_lib.checkpw(otp.encode(), hashed.encode())
+        except Exception:
+            return False
 
     @staticmethod
     def encrypt_brokerage_token(plaintext: str) -> str:
-        # Encrypt the plaintext token string using AES-256-GCM with BROKERAGE_ENCRYPTION_KEY.
-        # Prepend the random nonce to the ciphertext and return as a base64 string.
-        # The decryption key never leaves the server — tokens are opaque to clients.
-        pass
+        key = bytes.fromhex(settings.BROKERAGE_ENCRYPTION_KEY)
+        nonce = os.urandom(12)
+        aesgcm = AESGCM(key)
+        ct = aesgcm.encrypt(nonce, plaintext.encode(), None)
+        return base64.b64encode(nonce + ct).decode()
 
     @staticmethod
     def decrypt_brokerage_token(ciphertext: str) -> str:
-        # Decode the base64 string, extract the nonce prefix, and decrypt with AES-256-GCM.
-        # Only called inside brokerage adapter methods — never in controllers or services.
-        # Raises ValueError if the ciphertext is malformed or the key is wrong.
-        pass
+        key = bytes.fromhex(settings.BROKERAGE_ENCRYPTION_KEY)
+        data = base64.b64decode(ciphertext)
+        nonce, ct = data[:12], data[12:]
+        aesgcm = AESGCM(key)
+        return aesgcm.decrypt(nonce, ct, None).decode()

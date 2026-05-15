@@ -24,8 +24,5 @@ async def update_me(body: UserUpdatePayload, current_user=Depends(get_current_us
 
 @router.delete("/me")
 async def delete_me(current_user=Depends(get_current_user), session: AsyncSession = Depends(get_session)):
-    # Soft-delete the authenticated user by setting deleted_at = now() and is_active = False.
-    # Revoke all refresh tokens so all active sessions are immediately invalidated.
-    # Trigger async cleanup of brokerage connections and pending rebalances for this user.
     await UserService(session).delete_self(current_user.id)
     return {"message": "Account deleted successfully"}

@@ -43,7 +43,12 @@ class ForgotPasswordPayload(BaseModel):
     email: str
 
 
+class RequestOtpPayload(BaseModel):
+    purpose: str  # "login_2fa"
+
+
 class ResetPasswordPayload(BaseModel):
+    email: str
     token: str
     new_password: str
 

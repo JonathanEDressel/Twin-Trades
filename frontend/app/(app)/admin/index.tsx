@@ -56,13 +56,13 @@ export default function AdminDashboard() {
           </View>
         )}
 
-        <AdminCard title="Users" onPress={() => router.push('/(app)/(tabs)/admin/users')} />
+        <AdminCard title="Users" onPress={() => router.push('/(app)/admin/users')} />
         <AdminCard
           title="Portfolios"
-          onPress={() => router.push('/(app)/(tabs)/admin/portfolios')}
+          onPress={() => router.push('/(app)/admin/portfolios')}
         />
-        <AdminCard title="Changelog" onPress={() => router.push('/(app)/(tabs)/admin/changelog')} />
-        <AdminCard title="Error Logs" onPress={() => router.push('/(app)/(tabs)/admin/logs')} />
+        <AdminCard title="Changelog" onPress={() => router.push('/(app)/admin/changelog')} />
+        <AdminCard title="Error Logs" onPress={() => router.push('/(app)/admin/logs')} />
       </ScrollView>
     </SafeAreaView>
   );

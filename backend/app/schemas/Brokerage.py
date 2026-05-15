@@ -22,3 +22,7 @@ class OAuthCallbackPayload(BaseModel):
     code: str
     state: str
     brokerage_slug: str
+
+
+class OAuthInitiatePayload(BaseModel):
+    brokerage_slug: str

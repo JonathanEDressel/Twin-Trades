@@ -12,6 +12,9 @@ class TradeService:
         self.brokerage_db = BrokerageDbContext(session)
         self.portfolio_db = PortfolioDbContext(session)
 
+    async def get_history(self, user_id: int, page: int, page_size: int, **filters) -> tuple[list, int]:
+        return await self.trade_db.find_user_trades(user_id, page, page_size, **filters)
+
     async def execute_rebalance(self, event_id: int, user_id: int) -> None:
         # Fetch the user's active brokerage connection and decrypt tokens via Security.decrypt_brokerage_token.
         # Compute delta trades (buy/sell) needed to reach the target allocation and submit each via the adapter.

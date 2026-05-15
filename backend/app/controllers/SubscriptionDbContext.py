@@ -1,5 +1,5 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, desc
 from datetime import datetime
 from app.models.SubscriptionModel import Subscription, SubscriptionStatus, SubscriptionPlan
 
@@ -10,9 +10,16 @@ class SubscriptionDbContext:
         self.session = session
 
     async def find_active_for_user(self, user_id: int) -> Subscription | None:
-        # Return the subscription row with status IN ("active", "grace_period") for the user.
-        # Order by created_at DESC and return only the most recent; return None if none found.
-        pass
+        result = await self.session.execute(
+            select(Subscription)
+            .where(
+                Subscription.user_id == user_id,
+                Subscription.status.in_([SubscriptionStatus.active, SubscriptionStatus.grace_period]),
+            )
+            .order_by(desc(Subscription.created_at))
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
 
     async def upsert_by_transaction_id(self, user_id: int, transaction_id: str, **kwargs) -> Subscription:
         # Insert a new subscription row or update the existing one matching apple_transaction_id.

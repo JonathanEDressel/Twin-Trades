@@ -23,6 +23,13 @@ class PortfolioResponse(BaseModel):
     created_at: datetime
 
 
+class MarketplaceResponse(BaseModel):
+    portfolios: list[PortfolioResponse]
+    total: int
+    page: int
+    page_size: int
+
+
 class CreatePortfolioPayload(BaseModel):
     name: str
     description: str | None = None
@@ -34,3 +41,10 @@ class UpdateHoldingsPayload(BaseModel):
 
 class JoinPortfolioPayload(BaseModel):
     portfolio_id: int
+
+
+class PaginatedPortfoliosResponse(BaseModel):
+    portfolios: list[PortfolioResponse]
+    total: int
+    page: int
+    page_size: int
