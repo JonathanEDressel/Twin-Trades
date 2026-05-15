@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import {
   Alert,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   RefreshControl,
   SafeAreaView,
   ScrollView,
@@ -463,26 +465,33 @@ export default function AdminPortfolioDetailScreen() {
 
       {/* Edit Holdings Modal */}
       <Modal visible={showEditHoldings} animationType="slide" transparent>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modal}>
-            <View style={styles.row}>
+        <KeyboardAvoidingView
+          style={styles.modalBackdrop}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <View style={styles.holdingsModal}>
+            {/* Title + running total */}
+            <View style={styles.holdingsTitleRow}>
               <Text style={styles.modalTitle}>Edit Holdings</Text>
               <Text
                 style={[
                   styles.totalPctLabel,
-                  {
-                    color:
-                      Math.abs(totalPct - 100) < 0.01 ? colors.success : colors.danger,
-                  },
+                  { color: Math.abs(totalPct - 100) < 0.01 ? colors.success : colors.danger },
                 ]}
               >
                 {totalPct.toFixed(2)}% / 100%
               </Text>
             </View>
-            <Text style={styles.holdingsHint}>
-              All allocations must sum to exactly 100%.
-            </Text>
+            <Text style={styles.holdingsHint}>All allocations must sum to exactly 100%.</Text>
 
+            {/* Column labels */}
+            <View style={styles.holdingColRow}>
+              <Text style={[styles.holdingColLabel, { flex: 2 }]}>Ticker</Text>
+              <Text style={[styles.holdingColLabel, { flex: 1.5, textAlign: 'right' as const }]}>Allocation</Text>
+              <View style={{ width: 28 }} />
+            </View>
+
+            {/* Scrollable rows */}
             <ScrollView
               style={styles.holdingsScroll}
               showsVerticalScrollIndicator={false}
@@ -503,26 +512,27 @@ export default function AdminPortfolioDetailScreen() {
                     autoCapitalize="characters"
                     maxLength={10}
                   />
-                  <TextInput
-                    style={styles.pctInput}
-                    value={h.target_pct}
-                    onChangeText={(v) =>
-                      setDraftHoldings((prev) =>
-                        prev.map((x, i) => (i === idx ? { ...x, target_pct: v } : x)),
-                      )
-                    }
-                    placeholder="25.00"
-                    placeholderTextColor={colors.textMuted}
-                    keyboardType="decimal-pad"
-                    maxLength={6}
-                  />
-                  <Text style={styles.pctSymbol}>%</Text>
+                  <View style={styles.pctContainer}>
+                    <TextInput
+                      style={styles.pctInput}
+                      value={h.target_pct}
+                      onChangeText={(v) =>
+                        setDraftHoldings((prev) =>
+                          prev.map((x, i) => (i === idx ? { ...x, target_pct: v } : x)),
+                        )
+                      }
+                      placeholder="25.00"
+                      placeholderTextColor={colors.textMuted}
+                      keyboardType="decimal-pad"
+                      maxLength={6}
+                    />
+                    <Text style={styles.pctSymbol}>%</Text>
+                  </View>
                   <TouchableOpacity
                     onPress={() =>
                       setDraftHoldings((prev) => prev.filter((_, i) => i !== idx))
                     }
-                    hitSlop={8}
-                    style={styles.removeBtn}
+                    hitSlop={12}
                   >
                     <Text style={styles.removeText}>✕</Text>
                   </TouchableOpacity>
@@ -539,7 +549,8 @@ export default function AdminPortfolioDetailScreen() {
               </TouchableOpacity>
             </ScrollView>
 
-            <View style={styles.modalActions}>
+            {/* Actions */}
+            <View style={[styles.modalActions, { marginTop: spacing.sm }]}>
               <TouchableOpacity
                 style={styles.cancelBtn}
                 onPress={() => setShowEditHoldings(false)}
@@ -555,7 +566,7 @@ export default function AdminPortfolioDetailScreen() {
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );
@@ -688,13 +699,43 @@ const styles = StyleSheet.create({
     maxHeight: '88%',
   },
   modalTitle: { ...typography.headline, color: colors.textPrimary, marginBottom: spacing.sm },
+  // Holdings modal — dedicated styles
+  holdingsModal: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: radius.lg,
+    borderTopRightRadius: radius.lg,
+    paddingTop: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.xl,
+    maxHeight: '82%' as any,
+  },
+  holdingsTitleRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+    marginBottom: spacing.xs,
+  },
   totalPctLabel: { ...typography.body, fontWeight: '700' as const },
   holdingsHint: { ...typography.caption, color: colors.textMuted, marginBottom: spacing.sm },
-  holdingsScroll: { maxHeight: 320 },
+  holdingColRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: spacing.xs,
+    paddingBottom: spacing.xs,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    marginBottom: spacing.xs,
+  },
+  holdingColLabel: {
+    ...typography.caption,
+    color: colors.textMuted,
+    fontWeight: '600' as const,
+  },
+  holdingsScroll: { maxHeight: 240 },
   holdingEditRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: spacing.xs,
     marginBottom: spacing.xs,
   },
   tickerInput: {
@@ -704,24 +745,31 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     color: colors.textPrimary,
-    padding: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 10,
     ...typography.body,
     fontWeight: '700' as const,
   },
-  pctInput: {
+  pctContainer: {
     flex: 1.5,
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
     backgroundColor: colors.primary,
     borderRadius: radius.sm,
     borderWidth: 1,
     borderColor: colors.border,
+    paddingRight: spacing.xs,
+  },
+  pctInput: {
+    flex: 1,
     color: colors.textPrimary,
-    padding: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 10,
     ...typography.body,
     textAlign: 'right' as const,
   },
-  pctSymbol: { ...typography.body, color: colors.textMuted },
-  removeBtn: { padding: spacing.xs },
-  removeText: { ...typography.body, color: colors.danger },
+  pctSymbol: { ...typography.caption, color: colors.textMuted },
+  removeText: { ...typography.body, color: colors.danger, paddingHorizontal: spacing.xs },
   addHoldingBtn: {
     borderWidth: 1,
     borderColor: colors.accent,
