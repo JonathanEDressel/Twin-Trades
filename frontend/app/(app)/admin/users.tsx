@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { router } from 'expo-router';
 import {
   Alert,
@@ -10,6 +10,7 @@ import {
   StyleSheet,
   Switch,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -24,7 +25,6 @@ import { useAuthStore } from '@/stores/authStore';
 import { LoadingOverlay } from '@/components/ui/LoadingOverlay';
 import { Toast } from '@/components/ui/Toast';
 import { colors, radius, spacing, typography } from '@/helpers/designTokens';
-import { formatDate } from '@/helpers/formatters';
 
 const PAGE_SIZE = 20;
 
@@ -47,20 +47,56 @@ const SUB_COLORS: Record<string, string> = {
   cancelled: colors.danger,
 };
 
+const PLAN_LABELS: Record<string, string> = {
+  monthly: 'Monthly',
+  annual: 'Annual',
+  lifetime: 'Lifetime',
+};
+
 function Pill({ label, color }: { label: string; color: string }) {
   return (
-    <View style={[styles.pill, { borderColor: color }]}>
+    <View style={[styles.pill, { borderColor: color, backgroundColor: color + '1A' }]}>
       <Text style={[styles.pillText, { color }]}>{label}</Text>
     </View>
   );
 }
 
-function formatInvested(amount: string): string {
-  const n = parseFloat(amount);
-  if (!n) return '$0';
-  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `$${(n / 1_000).toFixed(1)}K`;
-  return `$${n.toFixed(2)}`;
+function TableHeader({
+  sortBy,
+  sortOrder,
+  onSort,
+}: {
+  sortBy: string;
+  sortOrder: 'asc' | 'desc';
+  onSort: (col: string) => void;
+}) {
+  function SortIcon({ col }: { col: string }) {
+    const active = sortBy === col;
+    return (
+      <Text style={[styles.sortIcon, active && styles.sortIconActive]}>
+        {active ? (sortOrder === 'asc' ? ' ↑' : ' ↓') : ' ⇅'}
+      </Text>
+    );
+  }
+  return (
+    <View style={styles.tableHeader}>
+      <TouchableOpacity style={{ flex: 2.5, flexDirection: 'row', alignItems: 'center' }} onPress={() => onSort('username')}>
+        <Text style={styles.headerCell}>User</Text><SortIcon col="username" />
+      </TouchableOpacity>
+      <TouchableOpacity style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }} onPress={() => onSort('role')}>
+        <Text style={styles.headerCell}>Role</Text><SortIcon col="role" />
+      </TouchableOpacity>
+      <TouchableOpacity style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }} onPress={() => onSort('subscription_plan')}>
+        <Text style={styles.headerCell}>Plan</Text><SortIcon col="subscription_plan" />
+      </TouchableOpacity>
+      <TouchableOpacity style={{ flex: 1.2, flexDirection: 'row', alignItems: 'center' }} onPress={() => onSort('subscription_status')}>
+        <Text style={styles.headerCell}>Status</Text><SortIcon col="subscription_status" />
+      </TouchableOpacity>
+      <TouchableOpacity style={{ flex: 0.5, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }} onPress={() => onSort('is_active')}>
+        <Text style={[styles.headerCell, { textAlign: 'center' }]}>On</Text><SortIcon col="is_active" />
+      </TouchableOpacity>
+    </View>
+  );
 }
 
 export default function AdminUsersScreen() {
@@ -69,14 +105,44 @@ export default function AdminUsersScreen() {
   const qc = useQueryClient();
   const [toast, setToast] = useState<{ message: string; variant: 'error' | 'success' } | null>(null);
   const [editing, setEditing] = useState<AdminUser | null>(null);
+
+  // edit drafts
   const [draftRole, setDraftRole] = useState('user');
   const [draftActive, setDraftActive] = useState(true);
   const [draftExempt, setDraftExempt] = useState(false);
+  const [draftUsername, setDraftUsername] = useState('');
+  const [draftEmail, setDraftEmail] = useState('');
+  const [draftDisplayName, setDraftDisplayName] = useState('');
+  const [draftPassword, setDraftPassword] = useState('');
+
+  // search with 500 ms debounce
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // sorting
+  const [sortBy, setSortBy] = useState('created_at');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+
+  function handleSort(col: string) {
+    if (col === sortBy) {
+      setSortOrder((o) => (o === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortBy(col);
+      setSortOrder('asc');
+    }
+  }
+
+  useEffect(() => {
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => setSearch(searchInput.trim()), 500);
+    return () => { if (searchTimer.current) clearTimeout(searchTimer.current); };
+  }, [searchInput]);
 
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading, refetch } =
     useInfiniteQuery({
-      queryKey: ['admin-users'],
-      queryFn: ({ pageParam = 1 }) => listUsers(pageParam as number, PAGE_SIZE),
+      queryKey: ['admin-users', search, sortBy, sortOrder],
+      queryFn: ({ pageParam = 1 }) => listUsers(pageParam as number, PAGE_SIZE, search || undefined, sortBy, sortOrder),
       initialPageParam: 1,
       getNextPageParam: (last, all) =>
         last.users.length === PAGE_SIZE ? all.length + 1 : undefined,
@@ -109,6 +175,10 @@ export default function AdminUsersScreen() {
     setDraftRole(user.role);
     setDraftActive(user.is_active);
     setDraftExempt(user.subscription_exempt);
+    setDraftUsername(user.username);
+    setDraftEmail(user.email);
+    setDraftDisplayName(user.display_name ?? '');
+    setDraftPassword('');
     setEditing(user);
   }
 
@@ -118,6 +188,11 @@ export default function AdminUsersScreen() {
     if (draftRole !== editing.role) payload.role = draftRole;
     if (draftActive !== editing.is_active) payload.is_active = draftActive;
     if (draftExempt !== editing.subscription_exempt) payload.subscription_exempt = draftExempt;
+    if (draftUsername.trim() !== editing.username) payload.username = draftUsername.trim();
+    if (draftEmail.trim().toLowerCase() !== editing.email.toLowerCase()) payload.email = draftEmail.trim();
+    const trimmedDisplayName = draftDisplayName.trim();
+    if (trimmedDisplayName !== (editing.display_name ?? '')) payload.display_name = trimmedDisplayName || undefined;
+    if (draftPassword.length > 0) payload.password = draftPassword;
     if (Object.keys(payload).length === 0) {
       setEditing(null);
       return;
@@ -152,62 +227,85 @@ export default function AdminUsersScreen() {
         }
         onEndReached={() => hasNextPage && !isFetchingNextPage && fetchNextPage()}
         onEndReachedThreshold={0.4}
-        ListHeaderComponent={<Text style={styles.title}>Users</Text>}
+        stickyHeaderIndices={[0]}
+        ListHeaderComponent={
+          <View style={styles.listHeader}>
+            <Text style={styles.title}>Users</Text>
+            <View style={styles.searchBar}>
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search by username or email…"
+                placeholderTextColor={colors.textMuted}
+                value={searchInput}
+                onChangeText={setSearchInput}
+                autoCapitalize="none"
+                autoCorrect={false}
+                clearButtonMode="while-editing"
+              />
+            </View>
+            <TableHeader sortBy={sortBy} sortOrder={sortOrder} onSort={handleSort} />
+          </View>
+        }
         renderItem={({ item }: { item: AdminUser }) => {
           const canEdit = isSiteAdmin || item.role !== 'ultimate_admin';
+          const subStatus = item.subscription_status;
+          const subPlan = item.subscription_plan;
           return (
             <TouchableOpacity
-              style={styles.row}
+              style={styles.tableRow}
               onPress={() => canEdit ? openEdit(item) : undefined}
               activeOpacity={canEdit ? 0.7 : 1}
             >
-              {/* username + role pill */}
-              <View style={styles.rowTop}>
-                <Text style={styles.username}>@{item.username}</Text>
+              {/* User column */}
+              <View style={{ flex: 2.5 }}>
+                <Text style={styles.username} numberOfLines={1}>@{item.username}</Text>
+                <Text style={styles.emailCell} numberOfLines={1}>{item.email}</Text>
+                {item.subscription_exempt && (
+                  <Text style={styles.exemptBadge}>Exempt</Text>
+                )}
+              </View>
+
+              {/* Role column */}
+              <View style={{ flex: 1, alignItems: 'flex-start', justifyContent: 'center' }}>
                 <Pill
                   label={ROLE_LABELS[item.role] ?? item.role}
                   color={ROLE_COLORS[item.role] ?? colors.textMuted}
                 />
               </View>
 
-              {/* email */}
-              <Text style={styles.email}>{item.email}</Text>
-
-              {/* status pills */}
-              <View style={styles.pillRow}>
-                <Pill
-                  label={item.is_active ? 'Active' : 'Inactive'}
-                  color={item.is_active ? colors.success : colors.danger}
-                />
-                <Pill
-                  label={item.subscription_status
-                    ? item.subscription_status.replace('_', ' ')
-                    : 'No sub'}
-                  color={item.subscription_status
-                    ? (SUB_COLORS[item.subscription_status] ?? colors.textMuted)
-                    : colors.textMuted}
-                />
-                {item.subscription_exempt && <Pill label="Exempt" color={colors.accent} />}
-              </View>
-
-              {/* portfolio count + invested */}
-              <View style={styles.statsRow}>
-                <Text style={styles.stat}>
-                  {item.portfolio_count} portfolio{item.portfolio_count !== 1 ? 's' : ''}
+              {/* Plan column */}
+              <View style={{ flex: 1, alignItems: 'flex-start', justifyContent: 'center' }}>
+                <Text style={styles.planText}>
+                  {subPlan ? (PLAN_LABELS[subPlan] ?? subPlan) : '—'}
                 </Text>
-                <Text style={styles.dot}>·</Text>
-                <Text style={styles.stat}>{formatInvested(item.invested_amount)} invested</Text>
               </View>
 
-              {/* joined date */}
-              <Text style={styles.date}>Joined {formatDate(item.created_at)}</Text>
+              {/* Status column */}
+              <View style={{ flex: 1.2, alignItems: 'flex-start', justifyContent: 'center' }}>
+                {subStatus ? (
+                  <Pill
+                    label={subStatus.replace('_', ' ')}
+                    color={SUB_COLORS[subStatus] ?? colors.textMuted}
+                  />
+                ) : (
+                  <Text style={styles.noSubText}>—</Text>
+                )}
+              </View>
 
-              {!canEdit && <Text style={styles.viewOnly}>View only</Text>}
+              {/* Active indicator */}
+              <View style={{ flex: 0.5, alignItems: 'center', justifyContent: 'center' }}>
+                <View style={[styles.activeDot, { backgroundColor: item.is_active ? colors.success : colors.danger }]} />
+              </View>
             </TouchableOpacity>
           );
         }}
+        ItemSeparatorComponent={() => <View style={styles.separator} />}
         ListEmptyComponent={
-          !isLoading ? <Text style={styles.empty}>No users found.</Text> : null
+          !isLoading ? (
+            <Text style={styles.empty}>
+              {search ? `No users found for "${search}".` : 'No users found.'}
+            </Text>
+          ) : null
         }
         contentContainerStyle={styles.list}
       />
@@ -217,9 +315,50 @@ export default function AdminUsersScreen() {
         <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={() => setEditing(null)} />
         <View style={styles.sheet}>
           {editing && (
-            <ScrollView bounces={false} showsVerticalScrollIndicator={false}>
-              <Text style={styles.sheetTitle}>@{editing.username}</Text>
-              <Text style={styles.sheetEmail}>{editing.email}</Text>
+            <ScrollView bounces={false} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+              <Text style={styles.sheetTitle}>Edit User</Text>
+
+              <Text style={styles.fieldLabel}>Username</Text>
+              <TextInput
+                style={styles.textInput}
+                value={draftUsername}
+                onChangeText={setDraftUsername}
+                autoCapitalize="none"
+                autoCorrect={false}
+                placeholderTextColor={colors.textMuted}
+              />
+
+              <Text style={styles.fieldLabel}>Email</Text>
+              <TextInput
+                style={styles.textInput}
+                value={draftEmail}
+                onChangeText={setDraftEmail}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                autoCorrect={false}
+                placeholderTextColor={colors.textMuted}
+              />
+
+              <Text style={styles.fieldLabel}>Display Name</Text>
+              <TextInput
+                style={styles.textInput}
+                value={draftDisplayName}
+                onChangeText={setDraftDisplayName}
+                placeholder="(none)"
+                placeholderTextColor={colors.textMuted}
+              />
+
+              <Text style={styles.fieldLabel}>New Password</Text>
+              <TextInput
+                style={styles.textInput}
+                value={draftPassword}
+                onChangeText={setDraftPassword}
+                secureTextEntry
+                placeholder="Leave blank to keep unchanged"
+                placeholderTextColor={colors.textMuted}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
 
               <Text style={styles.fieldLabel}>Role</Text>
               <View style={styles.segmented}>
@@ -287,48 +426,106 @@ export default function AdminUsersScreen() {
   );
 }
 
+
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.primary },
-  list: { padding: spacing.md },
+  list: { paddingBottom: spacing.xl },
+  listHeader: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 5,
+  },
   title: { ...typography.title, color: colors.textPrimary, marginBottom: spacing.md },
-  row: {
-    backgroundColor: colors.card,
+
+  // Search
+  searchBar: {
+    backgroundColor: colors.surface,
     borderRadius: radius.md,
     borderWidth: 1,
     borderColor: colors.border,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.md,
+    overflow: 'hidden',
   },
-  rowTop: {
+  searchInput: {
+    ...typography.body,
+    color: colors.textPrimary,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 11,
+  },
+
+  // Table header — marginHorizontal breaks out of listHeader padding so columns
+  // align with row cells (both end up with spacing.md from the screen edge)
+  tableHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 10,
+    marginHorizontal: -spacing.md,
+    backgroundColor: colors.surface,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
   },
-  username: { ...typography.headline, color: colors.textPrimary },
-  email: { ...typography.body, color: colors.textMuted, marginBottom: spacing.xs },
-  pillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginBottom: spacing.xs },
-  statsRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginBottom: spacing.xs },
-  stat: { ...typography.caption, color: colors.textMuted },
-  dot: { ...typography.caption, color: colors.textMuted },
-  date: { ...typography.caption, color: colors.textMuted },
-  viewOnly: { ...typography.caption, color: colors.textMuted, fontStyle: 'italic', marginTop: spacing.xs },
-  pill: { borderWidth: 1, borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 2 },
-  pillText: { ...typography.caption, fontWeight: '600' },
-  empty: { ...typography.body, color: colors.textMuted, textAlign: 'center', marginTop: spacing.xl },
+  headerCell: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+
+  // Table rows
+  tableRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: 14,
+    backgroundColor: colors.card,
+  },
+  username: { fontSize: 13, fontWeight: '600', color: colors.textPrimary },
+  emailCell: { fontSize: 11, color: colors.textMuted, marginTop: 2 },
+  exemptBadge: { ...typography.caption, color: colors.accent, fontWeight: '600', marginTop: 2 },
+  planText: { ...typography.caption, color: colors.textPrimary },
+  noSubText: { ...typography.caption, color: colors.textMuted },
+  activeDot: { width: 10, height: 10, borderRadius: 5 },
+  separator: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border },
+
+  // Shared
+  pill: { borderWidth: 1, borderRadius: 99, paddingHorizontal: 8, paddingVertical: 3 },
+  pillText: { fontSize: 11, fontWeight: '600', letterSpacing: 0.2 },
+  empty: { ...typography.body, color: colors.textMuted, textAlign: 'center', marginTop: spacing.xl, paddingHorizontal: spacing.md },
   backBar: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
   backText: { ...typography.body, color: colors.accent },
+
+  // Sort icons
+  sortIcon: { fontSize: 10, color: colors.textMuted },
+  sortIconActive: { color: colors.accent },
+
+  // Modal
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)' },
   sheet: {
     backgroundColor: colors.surface,
     borderTopLeftRadius: radius.lg,
     borderTopRightRadius: radius.lg,
     padding: spacing.lg,
-    maxHeight: '70%',
+    maxHeight: '80%',
   },
-  sheetTitle: { ...typography.headline, color: colors.textPrimary, marginBottom: spacing.xs },
-  sheetEmail: { ...typography.body, color: colors.textMuted, marginBottom: spacing.md },
+  sheetTitle: { ...typography.headline, color: colors.textPrimary, marginBottom: spacing.md },
   fieldLabel: { ...typography.caption, color: colors.textMuted, marginTop: spacing.sm, marginBottom: spacing.xs },
+  textInput: {
+    ...typography.body,
+    color: colors.textPrimary,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
   segmented: { flexDirection: 'row', gap: spacing.xs },
   segment: {
     flex: 1,

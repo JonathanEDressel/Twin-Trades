@@ -4,7 +4,10 @@ from app.helper.Database import get_session
 from app.middleware.RoleMiddleware import require_role
 from app.middleware.RateLimiters import admin_limiter
 from app.schemas.User import UserResponse, AdminUserUpdatePayload, PaginatedUsersResponse, AdminUserResponse
-from app.schemas.Portfolio import PortfolioResponse, CreatePortfolioPayload, UpdateHoldingsPayload, PaginatedPortfoliosResponse
+from app.schemas.Portfolio import (
+    AdminPortfolioResponse, CreatePortfolioPayload, UpdatePortfolioPayload,
+    UpdateHoldingsPayload, PaginatedAdminPortfoliosResponse,
+)
 from app.schemas.ChangeLog import ChangeLogEntryResponse
 from app.services.AdminService import AdminService
 
@@ -15,10 +18,13 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 async def list_users(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
+    search: str | None = Query(None, max_length=100),
+    sort_by: str = Query("created_at"),
+    sort_order: str = Query("desc"),
     current_user=Depends(require_role("admin", "ultimate_admin")),
     session: AsyncSession = Depends(get_session)
 ):
-    return await AdminService(session).list_users(page, page_size)
+    return await AdminService(session).list_users(page, page_size, search, sort_by, sort_order)
 
 
 @router.patch("/users/{user_id}", response_model=UserResponse)
@@ -41,7 +47,7 @@ async def delete_user(
     return {"message": "User deleted"}
 
 
-@router.get("/portfolios", response_model=PaginatedPortfoliosResponse)
+@router.get("/portfolios", response_model=PaginatedAdminPortfoliosResponse)
 async def list_portfolios(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -51,23 +57,32 @@ async def list_portfolios(
     return await AdminService(session).list_portfolios(page, page_size)
 
 
-@router.post("/portfolios", response_model=PortfolioResponse)
+@router.get("/portfolios/{portfolio_id}", response_model=AdminPortfolioResponse)
+async def get_portfolio(
+    portfolio_id: int,
+    current_user=Depends(require_role("admin", "ultimate_admin")),
+    session: AsyncSession = Depends(get_session)
+):
+    return await AdminService(session).get_portfolio(portfolio_id)
+
+
+@router.post("/portfolios", response_model=AdminPortfolioResponse)
 async def create_portfolio(
     body: CreatePortfolioPayload,
     current_user=Depends(require_role("admin", "ultimate_admin")),
     session: AsyncSession = Depends(get_session)
 ):
-    return await AdminService(session).create_portfolio(current_user.id, body.name, body.description)
+    return await AdminService(session).create_portfolio(current_user.id, body.name, body.description, body.icon_url)
 
 
-@router.patch("/portfolios/{portfolio_id}", response_model=PortfolioResponse)
+@router.patch("/portfolios/{portfolio_id}", response_model=AdminPortfolioResponse)
 async def update_portfolio(
     portfolio_id: int,
-    body: CreatePortfolioPayload,
+    body: UpdatePortfolioPayload,
     current_user=Depends(require_role("admin", "ultimate_admin")),
     session: AsyncSession = Depends(get_session)
 ):
-    return await AdminService(session).update_portfolio(current_user.id, portfolio_id, body.name, body.description)
+    return await AdminService(session).update_portfolio(current_user.id, portfolio_id, body.name, body.description, body.icon_url)
 
 
 @router.delete("/portfolios/{portfolio_id}")
@@ -80,7 +95,7 @@ async def delete_portfolio(
     return {"message": "Portfolio deleted"}
 
 
-@router.put("/portfolios/{portfolio_id}/holdings", response_model=PortfolioResponse)
+@router.put("/portfolios/{portfolio_id}/holdings", response_model=AdminPortfolioResponse)
 async def update_holdings(
     portfolio_id: int,
     body: UpdateHoldingsPayload,
@@ -90,7 +105,7 @@ async def update_holdings(
     return await AdminService(session).update_holdings(current_user.id, portfolio_id, body.holdings)
 
 
-@router.patch("/portfolios/{portfolio_id}/toggle", response_model=PortfolioResponse)
+@router.patch("/portfolios/{portfolio_id}/toggle", response_model=AdminPortfolioResponse)
 async def toggle_portfolio_active(
     portfolio_id: int,
     current_user=Depends(require_role("admin", "ultimate_admin")),

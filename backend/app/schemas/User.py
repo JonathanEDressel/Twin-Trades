@@ -30,6 +30,10 @@ class AdminUserUpdatePayload(BaseModel):
     role: UserRole | None = None
     is_active: bool | None = None
     subscription_exempt: bool | None = None
+    username: str | None = None
+    email: str | None = None
+    display_name: str | None = None
+    password: str | None = None
 
 
 class AdminUserResponse(BaseModel):
@@ -43,6 +47,7 @@ class AdminUserResponse(BaseModel):
     subscription_exempt: bool
     created_at: datetime
     subscription_status: str | None
+    subscription_plan: str | None
     portfolio_count: int
     invested_amount: str
 

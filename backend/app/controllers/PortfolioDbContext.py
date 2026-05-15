@@ -1,7 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, delete
 from datetime import datetime, timezone
-from app.models.PortfolioModel import Portfolio, PortfolioHolding, UserPortfolio
+from app.models.PortfolioModel import Portfolio, PortfolioHolding, UserPortfolio, PortfolioHoldingHistory
 
 
 class PortfolioDbContext:
@@ -45,6 +45,59 @@ class PortfolioDbContext:
                 target_pct=h["target_pct"],
             ))
         await self.session.flush()
+
+    async def record_holding_history(
+        self,
+        portfolio_id: int,
+        old_holdings: list[PortfolioHolding],
+        new_holdings: list[dict],
+        changed_by_id: int,
+    ) -> None:
+        from decimal import Decimal
+        old_map = {h.ticker.upper(): h.target_pct for h in old_holdings}
+        new_map = {str(h["ticker"]).upper(): Decimal(str(h["target_pct"])) for h in new_holdings}
+
+        for ticker, new_pct in new_map.items():
+            if ticker not in old_map:
+                self.session.add(PortfolioHoldingHistory(
+                    portfolio_id=portfolio_id,
+                    ticker=ticker,
+                    change_type="added",
+                    target_pct=new_pct,
+                    old_target_pct=None,
+                    changed_by_id=changed_by_id,
+                ))
+            elif abs(Decimal(str(old_map[ticker])) - new_pct) > Decimal("0.001"):
+                self.session.add(PortfolioHoldingHistory(
+                    portfolio_id=portfolio_id,
+                    ticker=ticker,
+                    change_type="changed",
+                    target_pct=new_pct,
+                    old_target_pct=old_map[ticker],
+                    changed_by_id=changed_by_id,
+                ))
+
+        for ticker, old_pct in old_map.items():
+            if ticker not in new_map:
+                self.session.add(PortfolioHoldingHistory(
+                    portfolio_id=portfolio_id,
+                    ticker=ticker,
+                    change_type="removed",
+                    target_pct=old_pct,
+                    old_target_pct=None,
+                    changed_by_id=changed_by_id,
+                ))
+
+        await self.session.flush()
+
+    async def find_holding_history(self, portfolio_id: int, limit: int = 50) -> list[PortfolioHoldingHistory]:
+        result = await self.session.execute(
+            select(PortfolioHoldingHistory)
+            .where(PortfolioHoldingHistory.portfolio_id == portfolio_id)
+            .order_by(PortfolioHoldingHistory.changed_at.desc())
+            .limit(limit)
+        )
+        return list(result.scalars().all())
 
     async def find_user_portfolio(self, user_id: int, portfolio_id: int) -> UserPortfolio | None:
         result = await self.session.execute(

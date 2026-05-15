@@ -42,8 +42,8 @@ export const endpoints = {
   disconnectBrokerage: (id: number) => `/brokerages/connections/${id}`,
 
   // Admin
-  adminUsers: (page: number, pageSize: number) =>
-    `/admin/users?page=${page}&page_size=${pageSize}`,
+  adminUsers: (page: number, pageSize: number, search?: string, sortBy = 'created_at', sortOrder = 'desc') =>
+    `/admin/users?page=${page}&page_size=${pageSize}&sort_by=${sortBy}&sort_order=${sortOrder}${search ? `&search=${encodeURIComponent(search)}` : ''}`,
   adminUser: (id: number) => `/admin/users/${id}`,
   adminPortfolios: () => '/admin/portfolios',
   adminPortfolio: (id: number) => `/admin/portfolios/${id}`,

@@ -9,7 +9,10 @@ from app.controllers.PortfolioDbContext import PortfolioDbContext
 from app.models.PortfolioModel import Portfolio, PortfolioHolding
 from app.services.ChangeLogService import ChangeLogService
 from app.schemas.User import AdminUserUpdatePayload, PaginatedUsersResponse
-from app.schemas.Portfolio import PortfolioResponse, PortfolioHoldingResponse, PaginatedPortfoliosResponse
+from app.schemas.Portfolio import (
+    PortfolioResponse, PortfolioHoldingResponse, PortfolioHoldingHistoryResponse,
+    AdminPortfolioResponse, PaginatedAdminPortfoliosResponse, PaginatedPortfoliosResponse,
+)
 from app.helper.ErrorHandler import NotFoundError, BadRequestError, ForbiddenError
 
 
@@ -23,9 +26,9 @@ class AdminService:
         self.portfolio_db = PortfolioDbContext(session)
         self.changelog = ChangeLogService(session)
 
-    async def list_users(self, page: int, page_size: int) -> PaginatedUsersResponse:
+    async def list_users(self, page: int, page_size: int, search: str | None = None, sort_by: str = "created_at", sort_order: str = "desc") -> PaginatedUsersResponse:
         from app.schemas.User import AdminUserResponse
-        rows, total = await self.admin_db.find_all_users(page, page_size)
+        rows, total = await self.admin_db.find_all_users(page, page_size, search=search, sort_by=sort_by, sort_order=sort_order)
         users = [
             AdminUserResponse(
                 id=row["user"].id,
@@ -38,6 +41,7 @@ class AdminService:
                 subscription_exempt=row["user"].subscription_exempt,
                 created_at=row["user"].created_at,
                 subscription_status=row["subscription_status"],
+                subscription_plan=row["subscription_plan"],
                 portfolio_count=row["portfolio_count"],
                 invested_amount=row["invested_amount"],
             )
@@ -46,6 +50,7 @@ class AdminService:
         return PaginatedUsersResponse(users=users, total=total, page=page, page_size=page_size)
 
     async def update_user(self, actor_id: int, actor_role: str, user_id: int, payload: AdminUserUpdatePayload) -> object:
+        from app.helper.Security import Security
         user = await self.user_db.find_by_id(user_id)
         if user is None:
             raise NotFoundError("User not found")
@@ -54,13 +59,27 @@ class AdminService:
         if actor_role != "ultimate_admin" and payload.role is not None and payload.role.value == "ultimate_admin":
             raise ForbiddenError("Admins cannot assign the site admin role")
         updates = payload.model_dump(exclude_none=True)
+        # Handle username uniqueness
+        if "username" in updates:
+            existing = await self.user_db.find_by_username(updates["username"])
+            if existing and existing.id != user_id:
+                raise BadRequestError("Username is already taken")
+        # Handle email uniqueness (lowercase)
+        if "email" in updates:
+            updates["email"] = updates["email"].lower()
+            existing = await self.user_db.find_by_email(updates["email"])
+            if existing and existing.id != user_id:
+                raise BadRequestError("Email is already in use")
+        # Handle password — hash it and store as password_hash
+        if "password" in updates:
+            updates["password_hash"] = Security.hash_password(updates.pop("password"))
         updated = await self.user_db.update_by_id(user_id, **updates)
         await self.changelog.record(
             actor_id=actor_id,
             entity_type="user",
             entity_id=user_id,
             action="update",
-            detail=str(updates),
+            detail=str({k: v for k, v in updates.items() if k != "password_hash"}),
         )
         await self.session.commit()
         return updated
@@ -86,27 +105,43 @@ class AdminService:
         await self.changelog.record(actor_id=actor_id, entity_type="user", entity_id=user_id, action="delete")
         await self.session.commit()
 
-    async def _portfolio_response(self, p: Portfolio) -> PortfolioResponse:
+    async def _portfolio_response(
+        self,
+        p: Portfolio,
+        user_count: int = 0,
+        total_invested: str = "0.00",
+    ) -> AdminPortfolioResponse:
         holdings = await self.portfolio_db.find_holdings(p.id)
-        return PortfolioResponse(
+        history = await self.portfolio_db.find_holding_history(p.id, limit=100)
+        return AdminPortfolioResponse(
             id=p.id,
             name=p.name,
             description=p.description,
+            icon_url=p.icon_url,
             is_active=p.is_active,
             total_return_pct=p.total_return_pct,
+            return_1w=p.return_1w,
+            return_1m=p.return_1m,
+            return_3m=p.return_3m,
+            return_6m=p.return_6m,
+            return_1y=p.return_1y,
+            return_3y=p.return_3y,
             holdings=[PortfolioHoldingResponse.model_validate(h) for h in holdings],
+            holding_history=[PortfolioHoldingHistoryResponse.model_validate(h) for h in history],
+            user_count=user_count,
+            total_invested=total_invested,
             created_at=p.created_at,
         )
 
-    async def create_portfolio(self, actor_id: int, name: str, description: str | None) -> PortfolioResponse:
-        portfolio = Portfolio(name=name, description=description, created_by_id=actor_id)
+    async def create_portfolio(self, actor_id: int, name: str, description: str | None, icon_url: str | None = None) -> AdminPortfolioResponse:
+        portfolio = Portfolio(name=name, description=description, icon_url=icon_url, created_by_id=actor_id)
         self.session.add(portfolio)
         await self.session.flush()
         await self.changelog.record(actor_id=actor_id, entity_type="portfolio", entity_id=portfolio.id, action="create", detail=name)
         await self.session.commit()
         return await self._portfolio_response(portfolio)
 
-    async def update_portfolio(self, actor_id: int, portfolio_id: int, name: str | None, description: str | None) -> PortfolioResponse:
+    async def update_portfolio(self, actor_id: int, portfolio_id: int, name: str | None, description: str | None, icon_url: str | None = None) -> AdminPortfolioResponse:
         result = await self.session.execute(select(Portfolio).where(Portfolio.id == portfolio_id))
         portfolio = result.scalar_one_or_none()
         if portfolio is None:
@@ -115,6 +150,8 @@ class AdminService:
             portfolio.name = name
         if description is not None:
             portfolio.description = description
+        if icon_url is not None:
+            portfolio.icon_url = icon_url
         await self.session.flush()
         await self.changelog.record(actor_id=actor_id, entity_type="portfolio", entity_id=portfolio_id, action="update")
         await self.session.commit()
@@ -140,7 +177,7 @@ class AdminService:
         await self.changelog.record(actor_id=actor_id, entity_type="portfolio", entity_id=portfolio_id, action="delete", detail=portfolio.name)
         await self.session.commit()
 
-    async def update_holdings(self, actor_id: int, portfolio_id: int, holdings: list[dict]) -> PortfolioResponse:
+    async def update_holdings(self, actor_id: int, portfolio_id: int, holdings: list[dict]) -> AdminPortfolioResponse:
         total = sum(Decimal(str(h["target_pct"])) for h in holdings)
         if abs(total - Decimal("100")) > Decimal("0.01"):
             raise BadRequestError(f"Holdings must sum to 100.00, got {total}")
@@ -148,12 +185,14 @@ class AdminService:
         portfolio = result.scalar_one_or_none()
         if portfolio is None:
             raise NotFoundError("Portfolio not found")
+        old_holdings = await self.portfolio_db.find_holdings(portfolio_id)
+        await self.portfolio_db.record_holding_history(portfolio_id, old_holdings, holdings, actor_id)
         await self.portfolio_db.replace_holdings(portfolio_id, holdings)
         await self.changelog.record(actor_id=actor_id, entity_type="portfolio", entity_id=portfolio_id, action="update_holdings")
         await self.session.commit()
         return await self._portfolio_response(portfolio)
 
-    async def toggle_portfolio_active(self, actor_id: int, portfolio_id: int) -> PortfolioResponse:
+    async def toggle_portfolio_active(self, actor_id: int, portfolio_id: int) -> AdminPortfolioResponse:
         result = await self.session.execute(select(Portfolio).where(Portfolio.id == portfolio_id))
         portfolio = result.scalar_one_or_none()
         if portfolio is None:
@@ -172,10 +211,21 @@ class AdminService:
         await self.changelog.record(actor_id=actor_id, entity_type="user_portfolio", entity_id=portfolio_id, action="remove_user", detail=f"user_id={user_id}")
         await self.session.commit()
 
-    async def list_portfolios(self, page: int, page_size: int) -> PaginatedPortfoliosResponse:
+    async def list_portfolios(self, page: int, page_size: int) -> PaginatedAdminPortfoliosResponse:
         rows, total = await self.admin_db.find_all_portfolios(page, page_size)
-        portfolios = [await self._portfolio_response(p) for p in rows]
-        return PaginatedPortfoliosResponse(portfolios=portfolios, total=total, page=page, page_size=page_size)
+        portfolios = [
+            await self._portfolio_response(row["portfolio"], row["user_count"], row["total_invested"])
+            for row in rows
+        ]
+        return PaginatedAdminPortfoliosResponse(portfolios=portfolios, total=total, page=page, page_size=page_size)
+
+    async def get_portfolio(self, portfolio_id: int) -> AdminPortfolioResponse:
+        result = await self.session.execute(select(Portfolio).where(Portfolio.id == portfolio_id))
+        portfolio = result.scalar_one_or_none()
+        if portfolio is None:
+            raise NotFoundError("Portfolio not found")
+        stats = await self.admin_db.find_portfolio_stats(portfolio_id)
+        return await self._portfolio_response(portfolio, stats["user_count"], stats["total_invested"])
 
     async def get_change_log(self, page: int, page_size: int) -> dict:
         entries, total = await self.admin_db.find_change_log(page, page_size)

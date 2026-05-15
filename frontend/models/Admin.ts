@@ -19,6 +19,10 @@ export interface AdminUserUpdate {
   role?: string;
   is_active?: boolean;
   subscription_exempt?: boolean;
+  username?: string;
+  email?: string;
+  display_name?: string;
+  password?: string;
 }
 
 export interface AdminUser {
@@ -32,6 +36,7 @@ export interface AdminUser {
   subscription_exempt: boolean;
   created_at: string;
   subscription_status: string | null;
+  subscription_plan: string | null;
   portfolio_count: number;
   invested_amount: string;
 }
