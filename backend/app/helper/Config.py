@@ -43,10 +43,17 @@ class Settings(BaseSettings):
     TWILIO_AUTH_TOKEN: str = ""
     TWILIO_FROM_NUMBER: str = ""
 
-    # Webull
+    # Webull Connect API  (register at developer.webull.com → Connect API)
+    # OAuth2 grant credentials (obtained from Webull after app registration)
+    WEBULL_CLIENT_ID: str = ""
+    WEBULL_CLIENT_SECRET: str = ""
+    # Request-signing keys (provided alongside client_id / client_secret)
     WEBULL_APP_KEY: str = ""
     WEBULL_APP_SECRET: str = ""
     WEBULL_REDIRECT_URI: str = ""
+    # Set True to target UAT (test) environment; False for production
+    WEBULL_USE_UAT: bool = True
+    WEBULL_PAPER_TRADING: bool = True  # Set to False to use live trading endpoint
 
     # Alpaca (stub)
     ALPACA_CLIENT_ID: str = ""

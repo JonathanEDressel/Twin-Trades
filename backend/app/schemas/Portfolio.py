@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from datetime import datetime
 from decimal import Decimal
 
@@ -39,11 +39,11 @@ class PortfolioResponse(BaseModel):
     return_3y: Decimal | None
     holdings: list[PortfolioHoldingResponse] = []
     created_at: datetime
+    user_count: int = 0
 
 
 class AdminPortfolioResponse(PortfolioResponse):
     holding_history: list[PortfolioHoldingHistoryResponse] = []
-    user_count: int = 0
     total_invested: str = "0.00"
 
 
@@ -72,6 +72,15 @@ class UpdateHoldingsPayload(BaseModel):
 
 class JoinPortfolioPayload(BaseModel):
     portfolio_id: int
+    brokerage_connection_id: int | None = None
+    investment_amount: Decimal | None = None
+
+    @field_validator("investment_amount")
+    @classmethod
+    def investment_amount_minimum(cls, v: Decimal | None) -> Decimal | None:
+        if v is not None and v < Decimal("100"):
+            raise ValueError("Minimum investment amount is $100.00")
+        return v
 
 
 class PaginatedPortfoliosResponse(BaseModel):

@@ -21,6 +21,8 @@ class BrokerageService:
 
     async def initiate_oauth(self, user_id: int, brokerage_slug: str) -> dict:
         adapter = BrokerageFactory.get(brokerage_slug)
+        if not adapter.IS_AVAILABLE:
+            raise BadRequestError(f"Brokerage '{brokerage_slug}' is not available for connection")
         # Encode user_id + slug in a short-lived signed JWT used as the OAuth state for CSRF protection
         state = Security.sign_jwt(
             {"sub": str(user_id), "slug": brokerage_slug},

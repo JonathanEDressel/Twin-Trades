@@ -1,5 +1,5 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update, delete
+from sqlalchemy import select, update, delete, func
 from datetime import datetime, timezone
 from app.models.PortfolioModel import Portfolio, PortfolioHolding, UserPortfolio, PortfolioHoldingHistory
 
@@ -153,3 +153,16 @@ class PortfolioDbContext:
             .values(left_at=datetime.now(timezone.utc))
         )
         await self.session.flush()
+
+    async def find_user_counts(self, portfolio_ids: list[int]) -> dict[int, int]:
+        if not portfolio_ids:
+            return {}
+        result = await self.session.execute(
+            select(UserPortfolio.portfolio_id, func.count(UserPortfolio.id).label("cnt"))
+            .where(
+                UserPortfolio.portfolio_id.in_(portfolio_ids),
+                UserPortfolio.left_at.is_(None),
+            )
+            .group_by(UserPortfolio.portfolio_id)
+        )
+        return {row.portfolio_id: row.cnt for row in result}

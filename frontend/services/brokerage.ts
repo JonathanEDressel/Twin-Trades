@@ -6,6 +6,11 @@ import {
   OAuthCallbackPayload,
 } from '@/models/Brokerage';
 
+export async function fetchAvailableBrokerages(): Promise<string[]> {
+  const { data } = await apiClient.get<string[]>(endpoints.availableBrokerages());
+  return data;
+}
+
 export async function fetchBrokerageConnections(): Promise<BrokerageConnection[]> {
   const { data } = await apiClient.get<BrokerageConnection[]>(endpoints.brokerageConnections());
   return data;

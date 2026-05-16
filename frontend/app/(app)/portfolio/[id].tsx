@@ -107,13 +107,19 @@ export default function PortfolioDetailScreen() {
           </View>
         ))}
 
-        {/* Leave button */}
-        {isFollowing && (
+        {/* Action buttons */}
+        {isFollowing ? (
           <PrimaryButton
             title="Leave Portfolio"
             variant="danger"
             loading={leaveMutation.isPending}
             onPress={() => leaveMutation.mutate()}
+            style={styles.leaveBtn}
+          />
+        ) : (
+          <PrimaryButton
+            title="Clone Holdings"
+            onPress={() => router.push(`/join/${portfolioId}`)}
             style={styles.leaveBtn}
           />
         )}

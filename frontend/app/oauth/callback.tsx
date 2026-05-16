@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { handleOAuthCallback } from '@/services/brokerage';
+import { getPendingJoin, setPendingJoin } from '@/services/joinContext';
 import { Toast } from '@/components/ui/Toast';
 import { colors, spacing, typography } from '@/helpers/designTokens';
 
@@ -21,10 +22,26 @@ export default function OAuthCallbackScreen() {
     }
     try {
       await handleOAuthCallback({ code, state, brokerage_slug: slug });
-      router.replace('/(app)/(tabs)/settings');
+
+      // If the user was mid-way through a portfolio join flow, return them there.
+      const pendingPortfolioId = getPendingJoin();
+      if (pendingPortfolioId != null) {
+        setPendingJoin(null);
+        router.replace(`/join/${pendingPortfolioId}`);
+      } else {
+        router.replace('/(app)/(tabs)/settings');
+      }
     } catch {
       setError('Failed to connect brokerage. Please try again.');
-      setTimeout(() => router.replace('/(app)/(tabs)/settings'), 2500);
+      setTimeout(() => {
+        const pendingPortfolioId = getPendingJoin();
+        if (pendingPortfolioId != null) {
+          setPendingJoin(null);
+          router.replace(`/join/${pendingPortfolioId}`);
+        } else {
+          router.replace('/(app)/(tabs)/settings');
+        }
+      }, 2500);
     }
   }
 

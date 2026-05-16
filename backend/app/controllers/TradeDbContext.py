@@ -45,9 +45,25 @@ class TradeDbContext:
         return list(rows_result.scalars().all()), total
 
     async def insert_trade(self, user_id: int, rebalance_event_id: int | None, brokerage_connection_id: int | None, ticker: str, action: str, quantity, price=None) -> Trade:
-        # Insert a new Trade row with status = "pending" and return the flushed object.
-        # All monetary values (quantity, price) must be passed as decimal.Decimal — never float.
-        pass
+        """Insert a new Trade row with status=pending and return the flushed object.
+
+        quantity is stored as a notional USD amount (e.g. 200.00 for $200 invested).
+        All monetary values must be passed as decimal.Decimal — never float.
+        """
+        from app.models.TradeModel import TradeAction, TradeStatus
+        trade = Trade(
+            user_id=user_id,
+            rebalance_event_id=rebalance_event_id,
+            brokerage_connection_id=brokerage_connection_id,
+            ticker=ticker,
+            action=TradeAction(action),
+            quantity=quantity,
+            price=price,
+            status=TradeStatus.pending,
+        )
+        self.session.add(trade)
+        await self.session.flush()
+        return trade
 
     async def update_trade_status(self, trade_id: int, status: TradeStatus, broker_order_id: str | None = None, price=None, executed_at: datetime | None = None, error_message: str | None = None) -> None:
         # UPDATE the trade row with execution results from the brokerage API response.

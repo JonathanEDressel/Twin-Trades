@@ -6,9 +6,15 @@ from app.middleware.RateLimiters import brokerage_auth_limiter, api_limiter
 from app.schemas.Brokerage import BrokerageConnectionResponse, OAuthInitiateResponse, OAuthCallbackPayload, OAuthInitiatePayload
 from app.controllers.BrokerageDbContext import BrokerageDbContext
 from app.services.BrokerageService import BrokerageService
+from app.brokerages.Factory import BrokerageFactory
 from app.helper.ErrorHandler import NotFoundError, ForbiddenError
 
 router = APIRouter(prefix="/brokerages", tags=["brokerages"])
+
+
+@router.get("/available", response_model=list[str])
+async def list_available(_current_user=Depends(get_current_user)):
+    return BrokerageFactory.list_available()
 
 
 @router.get("/connections", response_model=list[BrokerageConnectionResponse])
@@ -31,12 +37,5 @@ async def oauth_callback(body: OAuthCallbackPayload, current_user=Depends(get_cu
 
 @router.delete("/connections/{connection_id}")
 async def disconnect(connection_id: int, current_user=Depends(get_current_user), session: AsyncSession = Depends(get_session)):
-    db = BrokerageDbContext(session)
-    connection = await db.find_by_id(connection_id)
-    if connection is None:
-        raise NotFoundError("Brokerage connection not found")
-    if connection.user_id != current_user.id:
-        raise ForbiddenError("You do not own this connection")
-    await db.deactivate(connection_id)
-    await session.commit()
+    await BrokerageService(session).disconnect(current_user.id, connection_id)
     return {"message": "Brokerage disconnected"}

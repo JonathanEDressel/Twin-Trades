@@ -49,6 +49,18 @@ class BrokerageDbContext:
             .values(**values)
         )
 
+    async def find_by_id_for_user(self, connection_id: int, user_id: int) -> BrokerageConnection | None:
+        """Return the connection only if it is active and belongs to the given user."""
+        result = await self.session.execute(
+            select(BrokerageConnection)
+            .where(
+                BrokerageConnection.id == connection_id,
+                BrokerageConnection.user_id == user_id,
+                BrokerageConnection.is_active == True,
+            )
+        )
+        return result.scalar_one_or_none()
+
     async def deactivate(self, connection_id: int) -> None:
         await self.session.execute(
             update(BrokerageConnection)

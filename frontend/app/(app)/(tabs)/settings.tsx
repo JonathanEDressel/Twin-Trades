@@ -1,60 +1,62 @@
 import React, { useState } from 'react';
 import {
-  Alert,
-  Platform,
   SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from 'react-native';
 import { router } from 'expo-router';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { fetchMe, updateMe, deleteMe } from '@/services/user';
-import { fetchSubscriptionStatus } from '@/services/subscription';
-import {
-  fetchBrokerageConnections,
-  initiateOAuth,
-  disconnectBrokerage,
-} from '@/services/brokerage';
+import { Ionicons } from '@expo/vector-icons';
+import { useMutation } from '@tanstack/react-query';
 import { logout } from '@/services/auth';
-import {
-  fetchProducts,
-  purchaseProduct,
-  restorePurchases,
-  disconnectIAP,
-} from '@/services/iap';
-import { canUseBiometrics, authenticateWithBiometrics } from '@/services/biometrics';
+import { disconnectIAP } from '@/services/iap';
 import { useAuthStore } from '@/stores/authStore';
 import { clearTokens } from '@/services/keychain';
-import { PrimaryButton } from '@/components/ui/PrimaryButton';
-import { Toast } from '@/components/ui/Toast';
 import { LoadingOverlay } from '@/components/ui/LoadingOverlay';
-import { colors, spacing, typography, radius } from '@/helpers/designTokens';
-import { BrokerageConnection } from '@/models/Brokerage';
-import * as Linking from 'expo-linking';
+import { Toast } from '@/components/ui/Toast';
+import { colors, spacing, typography, radius, shadow } from '@/helpers/designTokens';
+
+type SectionRow = {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  onPress: () => void;
+  adminOnly?: boolean;
+};
+
+function UserAvatar({ name, email }: { name: string; email: string }) {
+  const initials = name.charAt(0).toUpperCase();
+  return (
+    <View style={avatarStyles.container}>
+      <View style={avatarStyles.circle}>
+        <Text style={avatarStyles.initials}>{initials}</Text>
+      </View>
+      <Text style={avatarStyles.name}>{name}</Text>
+      <Text style={avatarStyles.email}>{email}</Text>
+    </View>
+  );
+}
+
+function MenuRow({ icon, label, onPress }: { icon: keyof typeof Ionicons.glyphMap; label: string; onPress: () => void }) {
+  return (
+    <TouchableOpacity style={menuStyles.row} onPress={onPress} activeOpacity={0.75}>
+      <View style={menuStyles.iconWrap}>
+        <Ionicons name={icon} size={20} color={colors.accent} />
+      </View>
+      <Text style={menuStyles.label}>{label}</Text>
+      <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+    </TouchableOpacity>
+  );
+}
 
 export default function SettingsScreen() {
-  const qc = useQueryClient();
   const { user, clearAuth } = useAuthStore();
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState<{ message: string; variant: 'error' | 'success' } | null>(null);
 
-  const { data: subscription } = useQuery({
-    queryKey: ['subscription-status'],
-    queryFn: fetchSubscriptionStatus,
-  });
-
-  const { data: brokerages = [], refetch: refetchBrokerages } = useQuery({
-    queryKey: ['brokerage-connections'],
-    queryFn: fetchBrokerageConnections,
-  });
-
-  const { data: iapProducts = [] } = useQuery({
-    queryKey: ['iap-products'],
-    queryFn: fetchProducts,
-    enabled: Platform.OS === 'ios',
-  });
+  const isAdmin = user?.role === 'admin' || user?.role === 'ultimate_admin';
+  const displayName = user?.display_name ?? user?.username ?? '';
 
   async function handleLogout() {
     setLoading(true);
@@ -68,202 +70,56 @@ export default function SettingsScreen() {
     }
   }
 
-  async function handleDeleteAccount() {
-    console.warn('Delete account initiated');
-    Alert.alert(
-      'Delete Account',
-      'Are you sure? This action is permanent and cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            const ok = await authenticateWithBiometrics('Confirm account deletion');
-            if (!ok) return;
-            setLoading(true);
-            try {
-              await deleteMe();
-              clearAuth();
-              router.replace('/(auth)/login');
-            } catch {
-              setToast({ message: 'Failed to delete account.', variant: 'error' });
-            } finally {
-              setLoading(false);
-            }
-          },
-        },
-      ]
-    );
-  }
+  const sections: SectionRow[] = [
+    {
+      icon: 'person-circle-outline',
+      label: 'Profile',
+      onPress: () => router.push('/(app)/settings/profile'),
+    },
+    {
+      icon: 'card-outline',
+      label: 'Subscription',
+      onPress: () => router.push('/(app)/settings/subscription'),
+    },
+    {
+      icon: 'link-outline',
+      label: 'Brokerage Connections',
+      onPress: () => router.push('/(app)/settings/brokerages'),
+    },
+    {
+      icon: 'shield-checkmark-outline',
+      label: 'Admin Dashboard',
+      onPress: () => router.push('/(app)/admin'),
+      adminOnly: true,
+    },
+    {
+      icon: 'trash-outline',
+      label: 'Account',
+      onPress: () => router.push('/(app)/settings/account'),
+    },
+  ];
 
-  async function handleConnectBrokerage(slug: string) {
-    setLoading(true);
-    try {
-      const { auth_url } = await initiateOAuth(slug);
-      await Linking.openURL(auth_url);
-    } catch {
-      setToast({ message: 'Failed to initiate connection.', variant: 'error' });
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleDisconnectBrokerage(connection: BrokerageConnection) {
-    Alert.alert('Disconnect', `Disconnect from ${connection.brokerage_slug}?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Disconnect',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await disconnectBrokerage(connection.id);
-            refetchBrokerages();
-          } catch {
-            setToast({ message: 'Failed to disconnect brokerage.', variant: 'error' });
-          }
-        },
-      },
-    ]);
-  }
-
-  async function handlePurchase(productId: string) {
-    setLoading(true);
-    try {
-      const result = await purchaseProduct(productId);
-      if (result) {
-        setToast({ message: 'Subscription active!', variant: 'success' });
-        qc.invalidateQueries({ queryKey: ['subscription-status'] });
-      }
-    } catch {
-      setToast({ message: 'Purchase failed. Try again.', variant: 'error' });
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleRestorePurchases() {
-    setLoading(true);
-    try {
-      await restorePurchases();
-      setToast({ message: 'Purchases restored.', variant: 'success' });
-      qc.invalidateQueries({ queryKey: ['subscription-status'] });
-    } catch {
-      setToast({ message: 'Could not restore purchases.', variant: 'error' });
-    } finally {
-      setLoading(false);
-    }
-  }
+  const visibleSections = sections.filter((s) => !s.adminOnly || isAdmin);
 
   return (
     <SafeAreaView style={styles.safe}>
       {loading && <LoadingOverlay />}
       <ScrollView contentContainerStyle={styles.scroll}>
-        <Text style={styles.title}>Settings</Text>
+        <UserAvatar name={displayName} email={user?.email ?? ''} />
 
-        {/* Profile */}
-        <Section title="Profile">
-          <Text style={styles.label}>Email</Text>
-          <Text style={styles.value}>{user?.email}</Text>
-          <Text style={styles.label}>Username</Text>
-          <Text style={styles.value}>@{user?.username}</Text>
-          <PrimaryButton
-            title="Change Password"
-            variant="ghost"
-            onPress={() => router.push('/change-password')}
-            style={styles.btn}
-          />
-        </Section>
+        <View style={styles.card}>
+          {visibleSections.map((s, i) => (
+            <View key={s.label}>
+              <MenuRow icon={s.icon} label={s.label} onPress={s.onPress} />
+              {i < visibleSections.length - 1 && <View style={styles.divider} />}
+            </View>
+          ))}
+        </View>
 
-        {/* Subscription */}
-        <Section title="Subscription">
-          {subscription ? (
-            <>
-              <Text style={styles.value}>
-                Plan: {subscription.plan} — {subscription.status}
-              </Text>
-            </>
-          ) : (
-            <Text style={styles.value}>No active subscription.</Text>
-          )}
-
-          {Platform.OS === 'ios' &&
-            iapProducts.map((product) => (
-              <PrimaryButton
-                key={product.productId}
-                title={`Buy ${product.title}`}
-                onPress={() => handlePurchase(product.productId)}
-                style={styles.btn}
-              />
-            ))}
-
-          {Platform.OS === 'ios' && (
-            <PrimaryButton
-              title="Restore Purchases"
-              variant="ghost"
-              onPress={handleRestorePurchases}
-              style={styles.btn}
-            />
-          )}
-        </Section>
-
-        {/* Brokerages */}
-        <Section title="Brokerage Connections">
-          {brokerages.length === 0 ? (
-            <Text style={styles.value}>No brokerages connected.</Text>
-          ) : (
-            brokerages.map((b) => (
-              <View key={b.id} style={styles.brokerageRow}>
-                <Text style={styles.value}>{b.brokerage_slug}</Text>
-                <Text
-                  style={styles.disconnect}
-                  onPress={() => handleDisconnectBrokerage(b)}
-                >
-                  Disconnect
-                </Text>
-              </View>
-            ))
-          )}
-          {['alpaca', 'schwab', 'webull']
-            .filter((slug) => !brokerages.find((b) => b.brokerage_slug === slug))
-            .map((slug) => (
-              <PrimaryButton
-                key={slug}
-                title={`Connect ${slug.charAt(0).toUpperCase() + slug.slice(1)}`}
-                variant="ghost"
-                onPress={() => handleConnectBrokerage(slug)}
-                style={styles.btn}
-              />
-            ))}
-        </Section>
-
-        {/* Admin */}
-        {(user?.role === 'admin' || user?.role === 'ultimate_admin') && (
-          <Section title="Admin">
-            <PrimaryButton
-              title="Admin Dashboard"
-              variant="ghost"
-              onPress={() => router.push('/(app)/admin')}
-              style={styles.btn}
-            />
-          </Section>
-        )}
-
-        {/* Danger zone */}
-        <Section title="Account">
-          <PrimaryButton
-            title="Sign Out"
-            variant="ghost"
-            onPress={handleLogout}
-            style={styles.btn}
-          />
-          <PrimaryButton
-            title="Delete Account"
-            variant="danger"
-            onPress={handleDeleteAccount}
-            style={styles.btn}
-          />
-        </Section>
+        <TouchableOpacity style={styles.signOutBtn} onPress={handleLogout} activeOpacity={0.8}>
+          <Ionicons name="log-out-outline" size={20} color={colors.danger} />
+          <Text style={styles.signOutText}>Sign Out</Text>
+        </TouchableOpacity>
       </ScrollView>
 
       {toast && (
@@ -278,38 +134,64 @@ export default function SettingsScreen() {
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <View style={sectionStyles.container}>
-      <Text style={sectionStyles.heading}>{title}</Text>
-      {children}
-    </View>
-  );
-}
-
-const sectionStyles = StyleSheet.create({
-  container: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  heading: { ...typography.headline, color: colors.textPrimary, marginBottom: spacing.sm },
-});
-
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.primary },
-  scroll: { padding: spacing.md },
-  title: { ...typography.title, color: colors.textPrimary, marginBottom: spacing.md },
-  label: { ...typography.caption, color: colors.textMuted, marginTop: spacing.xs },
-  value: { ...typography.body, color: colors.textPrimary, marginTop: 2 },
-  btn: { marginTop: spacing.sm },
-  brokerageRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: spacing.sm,
+  scroll: { padding: spacing.md, paddingBottom: spacing.xl },
+  card: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: 'hidden',
+    ...shadow.card,
   },
-  disconnect: { ...typography.body, color: colors.danger },
+  divider: { height: 1, backgroundColor: colors.border, marginLeft: 56 },
+  signOutBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.lg,
+    paddingVertical: spacing.sm + 4,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.danger + '44',
+    backgroundColor: colors.danger + '10',
+  },
+  signOutText: { ...typography.headline, color: colors.danger },
+});
+
+const avatarStyles = StyleSheet.create({
+  container: { alignItems: 'center', paddingVertical: spacing.lg, marginBottom: spacing.md },
+  circle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: colors.accent + '22',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.sm,
+  },
+  initials: { fontSize: 32, fontWeight: '700', color: colors.accent },
+  name: { ...typography.headline, color: colors.textPrimary },
+  email: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
+});
+
+const menuStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+  },
+  iconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: colors.accent + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.sm,
+  },
+  label: { flex: 1, ...typography.body, color: colors.textPrimary },
 });

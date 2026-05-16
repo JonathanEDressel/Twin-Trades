@@ -36,6 +36,7 @@ export const endpoints = {
   verifyApple: () => '/subscriptions/verify-apple',
 
   // Brokerages
+  availableBrokerages: () => '/brokerages/available',
   brokerageConnections: () => '/brokerages/connections',
   initiateOAuth: (slug: string) => `/brokerages/oauth/initiate`,
   oauthCallback: () => '/brokerages/oauth/callback',

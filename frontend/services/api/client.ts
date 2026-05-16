@@ -74,7 +74,7 @@ apiClient.interceptors.response.use(
         return apiClient(originalRequest);
       } catch {
         await clearTokens();
-        throw new ApiError('UNAUTHORIZED', 'Session expired. Please log in again.');
+        throw new ApiError('UNAUTHORIZED', 'Invalid email or password.');
       } finally {
         isRefreshing = false;
       }

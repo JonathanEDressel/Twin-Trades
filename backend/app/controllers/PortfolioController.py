@@ -31,8 +31,13 @@ async def get_portfolio_detail(portfolio_id: int, current_user=Depends(get_curre
 
 @router.post("/join")
 async def join_portfolio(body: JoinPortfolioPayload, current_user=Depends(get_current_user), session: AsyncSession = Depends(get_session)):
-    await PortfolioService(session).join(current_user, body.portfolio_id)
-    return {"message": "Joined portfolio"}
+    result = await PortfolioService(session).join(
+        current_user,
+        body.portfolio_id,
+        investment_amount=body.investment_amount,
+        brokerage_connection_id=body.brokerage_connection_id,
+    )
+    return {"message": "Joined portfolio", "trades_queued": result["trades_queued"]}
 
 
 @router.delete("/{portfolio_id}/leave")

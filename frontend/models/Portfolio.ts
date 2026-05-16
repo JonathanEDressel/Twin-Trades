@@ -28,6 +28,7 @@ export interface Portfolio {
   return_3y: string | null;
   holdings: PortfolioHolding[];
   created_at: string;
+  user_count?: number;
 }
 
 export interface AdminPortfolio extends Portfolio {
@@ -54,6 +55,8 @@ export interface UpdateHoldingsPayload {
 
 export interface JoinPortfolioPayload {
   portfolio_id: number;
+  brokerage_connection_id?: number;
+  investment_amount?: number;
 }
 
 export interface PaginatedPortfolios {

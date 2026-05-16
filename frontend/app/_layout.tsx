@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { Stack, router } from 'expo-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useAuthStore } from '@/stores/authStore';
-import { getAccessToken } from '@/services/keychain';
+import { getAccessToken, clearTokens } from '@/services/keychain';
 import { fetchMe } from '@/services/user';
 import { requestPushPermission, registerDeviceToken } from '@/services/push';
 import { colors } from '@/helpers/designTokens';
@@ -40,6 +40,7 @@ export default function RootLayout() {
       await registerDeviceToken();
       router.replace('/(app)/(tabs)/');
     } catch {
+      await clearTokens();
       clearAuth();
       router.replace('/(auth)/login');
     }

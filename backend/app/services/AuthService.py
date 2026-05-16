@@ -19,7 +19,7 @@ class AuthService:
     async def login(self, payload: LoginPayload, ip: str | None, user_agent: str | None) -> TokenResponse:
         user = await self.user_db.find_by_email(payload.email)
 
-        if user is None or not Security.verify_password(payload.password, user.password_hash):
+        if user is None or not user.is_active or not Security.verify_password(payload.password, user.password_hash):
             await self.auth_db.insert_login_audit(
                 user_id=user.id if user else None,
                 ip=ip,
