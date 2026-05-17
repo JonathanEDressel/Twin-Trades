@@ -34,6 +34,9 @@ export const endpoints = {
   // Subscriptions
   subscriptionStatus: () => '/subscriptions/status',
   verifyApple: () => '/subscriptions/verify-apple',
+  cancelSubscription: () => '/subscriptions/cancel',
+  billingHistory: (page: number, pageSize: number) =>
+    `/subscriptions/billing-history?page=${page}&page_size=${pageSize}`,
 
   // Brokerages
   availableBrokerages: () => '/brokerages/available',
@@ -57,4 +60,8 @@ export const endpoints = {
     `/admin/changelog?page=${page}&page_size=${pageSize}`,
   adminLogs: (page: number, pageSize: number) =>
     `/admin/logs?page=${page}&page_size=${pageSize}`,
+  adminUserBillingHistory: (userId: number, page: number, pageSize: number) =>
+    `/admin/users/${userId}/billing-history?page=${page}&page_size=${pageSize}`,
+  adminCancelSubscription: (userId: number) =>
+    `/admin/users/${userId}/subscription/cancel`,
 } as const;

@@ -237,3 +237,61 @@ class AdminService:
 
     async def get_revenue(self) -> dict:
         return await self.admin_db.get_revenue_metrics()
+
+    async def get_user_billing_history(self, user_id: int, page: int, page_size: int) -> dict:
+        from app.controllers.SubscriptionDbContext import SubscriptionDbContext
+        from app.schemas.Subscription import BillingEventResponse, PaginatedBillingHistoryResponse
+        user = await self.user_db.find_by_id(user_id)
+        if user is None:
+            raise NotFoundError("User not found")
+        events, total = await SubscriptionDbContext(self.session).get_billing_history(user_id, page, page_size)
+        return PaginatedBillingHistoryResponse(
+            events=[BillingEventResponse.model_validate(e) for e in events],
+            total=total,
+            page=page,
+            page_size=page_size,
+        ).model_dump()
+
+    async def cancel_user_subscription(self, actor_id: int, user_id: int) -> dict:
+        from app.controllers.SubscriptionDbContext import SubscriptionDbContext
+        from app.models.SubscriptionModel import SubscriptionStatus
+        from app.models.SubscriptionBillingEventModel import BillingEventType
+
+        user = await self.user_db.find_by_id(user_id)
+        if user is None:
+            raise NotFoundError("User not found")
+
+        sub_db = SubscriptionDbContext(self.session)
+        sub = await sub_db.find_active_for_user(user_id)
+        if sub is None:
+            raise NotFoundError("No active subscription found for this user")
+
+        sub.status = SubscriptionStatus.cancelled
+        sub.cancelled_at = datetime.now(timezone.utc)
+        await self.session.flush()
+
+        await sub_db.insert_billing_event(
+            user_id=user_id,
+            subscription_id=sub.id,
+            event_type=BillingEventType.cancellation,
+            amount=sub.amount_paid,
+            currency=sub.currency,
+            apple_transaction_id=sub.apple_transaction_id,
+        )
+
+        await self.changelog.record(
+            actor_id=actor_id,
+            entity_type="subscription",
+            entity_id=sub.id,
+            action="cancel",
+            detail=f"Admin cancelled subscription for user {user_id}",
+        )
+        await self.session.commit()
+
+        return {
+            "message": (
+                "Subscription cancelled. Note: this does not stop future Apple charges — "
+                "the user must also cancel in their Apple subscription settings."
+            ),
+            "expires_at": sub.expires_at.isoformat() if sub.expires_at else None,
+        }

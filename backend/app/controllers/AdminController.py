@@ -150,3 +150,23 @@ async def get_change_log(
 ):
     result = await AdminService(session).get_change_log(page, 20)
     return result["entries"]
+
+
+@router.get("/users/{user_id}/billing-history")
+async def admin_user_billing_history(
+    user_id: int,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    current_user=Depends(require_role("admin", "ultimate_admin")),
+    session: AsyncSession = Depends(get_session),
+):
+    return await AdminService(session).get_user_billing_history(user_id, page, page_size)
+
+
+@router.post("/users/{user_id}/subscription/cancel")
+async def admin_cancel_subscription(
+    user_id: int,
+    current_user=Depends(require_role("admin", "ultimate_admin")),
+    session: AsyncSession = Depends(get_session),
+):
+    return await AdminService(session).cancel_user_subscription(current_user.id, user_id)

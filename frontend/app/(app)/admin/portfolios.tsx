@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   Alert,
   FlatList,
+  Image,
   Modal,
   RefreshControl,
   SafeAreaView,
@@ -108,6 +109,13 @@ export default function AdminPortfoliosScreen() {
         onPress={() => router.push(`/(app)/admin/portfolios/${p.id}` as any)}
         activeOpacity={0.8}
       >
+        {p.icon_url ? (
+          <Image
+            source={{ uri: p.icon_url }}
+            style={styles.cardImage}
+            resizeMode="cover"
+          />
+        ) : null}
         <View style={styles.cardTop}>
           <View style={styles.cardTitleRow}>
             <Text style={styles.portfolioName} numberOfLines={1}>
@@ -379,6 +387,15 @@ const styles = StyleSheet.create({
   },
   actionBtn: { flex: 1, alignItems: 'center' as const, padding: spacing.xs },
   actionText: { ...typography.caption, fontWeight: '600' as const },
+  cardImage: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    marginBottom: spacing.sm,
+    alignSelf: 'center' as const,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
   emptyText: {
     ...typography.body,
     color: colors.textMuted,

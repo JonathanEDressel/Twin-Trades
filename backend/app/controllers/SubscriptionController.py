@@ -1,12 +1,15 @@
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from decimal import Decimal
 from datetime import datetime, timezone
 from app.helper.Database import get_session
 from app.middleware.AuthMiddleware import get_current_user
-from app.schemas.Subscription import SubscriptionResponse, VerifyApplePayload
+from app.schemas.Subscription import (
+    SubscriptionResponse, VerifyApplePayload, BillingEventResponse, PaginatedBillingHistoryResponse,
+)
 from app.controllers.SubscriptionDbContext import SubscriptionDbContext
 from app.models.SubscriptionModel import SubscriptionPlan, SubscriptionStatus
+from app.services.SubscriptionService import SubscriptionService
 
 router = APIRouter(prefix="/subscriptions", tags=["subscriptions"])
 
@@ -28,8 +31,44 @@ async def get_status(current_user=Depends(get_current_user), session: AsyncSessi
 
 
 @router.post("/verify-apple", response_model=SubscriptionResponse)
-async def verify_apple(body: VerifyApplePayload, current_user=Depends(get_current_user), session: AsyncSession = Depends(get_session)):
-    # Verify the Apple transaction ID with the App Store Server API via StorekitService.
-    # Map the product_id to a SubscriptionPlan and upsert the subscription row.
-    # Raise BadRequestError if Apple rejects the transaction or it belongs to a different user.
-    pass
+async def verify_apple(
+    body: VerifyApplePayload,
+    current_user=Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    subscription = await SubscriptionService(session).verify_apple_transaction(
+        current_user.id, body.transaction_id, body.product_id
+    )
+    await session.commit()
+    return subscription
+
+
+@router.post("/cancel", response_model=SubscriptionResponse)
+async def cancel_subscription(
+    current_user=Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    if current_user.subscription_exempt:
+        from app.helper.ErrorHandler import NotFoundError
+        raise NotFoundError("Exempt accounts do not have a cancellable subscription")
+    subscription = await SubscriptionDbContext(session).cancel_subscription(current_user.id)
+    await session.commit()
+    return subscription
+
+
+@router.get("/billing-history", response_model=PaginatedBillingHistoryResponse)
+async def billing_history(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    current_user=Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    events, total = await SubscriptionDbContext(session).get_billing_history(
+        current_user.id, page, page_size
+    )
+    return PaginatedBillingHistoryResponse(
+        events=[BillingEventResponse.model_validate(e) for e in events],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )

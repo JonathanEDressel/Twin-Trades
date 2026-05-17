@@ -1,8 +1,16 @@
+from pathlib import Path
+from appstoreserverlibrary.api_client import AppStoreServerAPIClient
+from appstoreserverlibrary.models.Environment import Environment
 from app.helper.Config import settings
 
 
-async def get_app_store_client():
-    # Instantiate and return an App Store Server API client using apple-app-store-server-library.
-    # Load the private key from APPLE_PRIVATE_KEY_PATH and configure with APPLE_ISSUER_ID, APPLE_KEY_ID, and APPLE_BUNDLE_ID.
-    # The returned client is used to verify transactions and decode server notifications.
-    pass
+async def get_app_store_client() -> AppStoreServerAPIClient:
+    env = Environment.PRODUCTION if settings.ENV == "production" else Environment.SANDBOX
+    key_bytes = Path(settings.APPLE_PRIVATE_KEY_PATH).read_bytes()
+    return AppStoreServerAPIClient(
+        signing_key=key_bytes,
+        key_id=settings.APPLE_KEY_ID,
+        issuer_id=settings.APPLE_ISSUER_ID,
+        bundle_id=settings.APPLE_BUNDLE_ID,
+        environment=env,
+    )

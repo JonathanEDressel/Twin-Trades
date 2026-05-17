@@ -16,3 +16,26 @@ export interface VerifyApplePayload {
   transaction_id: string;
   product_id: string;
 }
+
+export type BillingEventType =
+  | 'payment_success'
+  | 'payment_failed'
+  | 'renewal'
+  | 'refund'
+  | 'cancellation';
+
+export interface BillingEvent {
+  id: number;
+  event_type: BillingEventType;
+  amount: string;
+  currency: string;
+  apple_transaction_id: string | null;
+  occurred_at: string;
+}
+
+export interface PaginatedBillingHistoryResponse {
+  events: BillingEvent[];
+  total: number;
+  page: number;
+  page_size: number;
+}

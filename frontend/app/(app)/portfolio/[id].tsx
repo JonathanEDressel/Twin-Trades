@@ -2,6 +2,7 @@ import React from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Image,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -68,6 +69,15 @@ export default function PortfolioDetailScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
+
+        {/* Portfolio Image */}
+        {portfolio.icon_url ? (
+          <Image
+            source={{ uri: portfolio.icon_url }}
+            style={styles.portfolioImage}
+            resizeMode="cover"
+          />
+        ) : null}
 
         {/* Header */}
         <Text style={styles.name}>{portfolio.name}</Text>
@@ -177,4 +187,10 @@ const styles = StyleSheet.create({
   holdingTicker: { ...typography.body, color: colors.textPrimary, fontWeight: '600' },
   holdingPct: { ...typography.body, color: colors.accent },
   leaveBtn: { marginTop: spacing.xl },
+  portfolioImage: {
+    width: '100%',
+    height: 200,
+    borderRadius: radius.md,
+    marginBottom: spacing.md,
+  },
 });

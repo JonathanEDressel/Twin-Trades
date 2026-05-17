@@ -23,11 +23,12 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 # Import all models so Alembic can detect schema changes
-import app.models.UserModel          # noqa: F401
-import app.models.PortfolioModel     # noqa: F401
-import app.models.SubscriptionModel  # noqa: F401
-import app.models.TradeModel         # noqa: F401
-import app.models.BrokerageModel     # noqa: F401
+import app.models.UserModel                     # noqa: F401
+import app.models.PortfolioModel                # noqa: F401
+import app.models.SubscriptionModel             # noqa: F401
+import app.models.SubscriptionBillingEventModel # noqa: F401
+import app.models.TradeModel                    # noqa: F401
+import app.models.BrokerageModel                # noqa: F401
 
 target_metadata = Base.metadata
 

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import {
   Alert,
+  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -251,6 +252,15 @@ export default function AdminPortfolioDetailScreen() {
       >
         {portfolio ? (
           <>
+            {/* Portfolio Image */}
+            {portfolio.icon_url ? (
+              <Image
+                source={{ uri: portfolio.icon_url }}
+                style={styles.portfolioImage}
+                resizeMode="cover"
+              />
+            ) : null}
+
             {/* Status & description */}
             <View style={styles.section}>
               <View style={styles.row}>
@@ -442,6 +452,13 @@ export default function AdminPortfolioDetailScreen() {
                 autoCapitalize="none"
                 keyboardType="url"
               />
+              {draftIconUrl.trim() ? (
+                <Image
+                  source={{ uri: draftIconUrl.trim() }}
+                  style={styles.iconPreview}
+                  resizeMode="cover"
+                />
+              ) : null}
 
               <View style={styles.modalActions}>
                 <TouchableOpacity
@@ -811,4 +828,17 @@ const styles = StyleSheet.create({
     alignItems: 'center' as const,
   },
   confirmText: { ...typography.body, color: '#fff', fontWeight: '600' as const },
+  portfolioImage: {
+    width: '100%',
+    height: 200,
+    borderRadius: radius.md,
+    marginBottom: spacing.sm,
+  },
+  iconPreview: {
+    width: '100%',
+    height: 140,
+    borderRadius: radius.sm,
+    marginBottom: spacing.sm,
+    backgroundColor: colors.border,
+  },
 });

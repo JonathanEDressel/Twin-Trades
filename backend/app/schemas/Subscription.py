@@ -2,6 +2,7 @@ from pydantic import BaseModel
 from datetime import datetime
 from decimal import Decimal
 from app.models.SubscriptionModel import SubscriptionPlan, SubscriptionStatus
+from app.models.SubscriptionBillingEventModel import BillingEventType
 
 
 class SubscriptionResponse(BaseModel):
@@ -24,3 +25,21 @@ class VerifyApplePayload(BaseModel):
 
 class AppleWebhookPayload(BaseModel):
     signedPayload: str   # JWT signed by Apple
+
+
+class BillingEventResponse(BaseModel):
+    model_config = {"from_attributes": True}
+
+    id: int
+    event_type: BillingEventType
+    amount: Decimal
+    currency: str
+    apple_transaction_id: str | None
+    occurred_at: datetime
+
+
+class PaginatedBillingHistoryResponse(BaseModel):
+    events: list[BillingEventResponse]
+    total: int
+    page: int
+    page_size: int
